@@ -2,6 +2,8 @@ import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import * as TypeBuilder from "./TypeBuilder.ts"
 
+const lines = (...parts: ReadonlyArray<string>): string => parts.join("\n")
+
 const primitiveCases = [
   ["string", Schema.String, "string"],
   ["number", Schema.Number, "number"],
@@ -53,6 +55,96 @@ describe("TypeBuilder", () => {
   it("renders anonymous unique symbols", () => {
     expect(TypeBuilder.render(Schema.UniqueSymbol(Symbol()))).toBe(
       "unique symbol",
+    )
+  })
+
+  it("renders structs", () => {
+    expect(
+      TypeBuilder.render(
+        Schema.Struct({
+          name: Schema.String,
+          age: Schema.Number,
+        }),
+      ),
+    ).toBe(
+      lines(
+        "{",
+        "    readonly name: string;",
+        "    readonly age: number;",
+        "}",
+      ),
+    )
+  })
+
+  it("renders optional properties", () => {
+    expect(
+      TypeBuilder.render(
+        Schema.Struct({
+          nickname: Schema.optionalKey(Schema.String),
+        }),
+      ),
+    ).toBe(lines("{", "    readonly nickname?: string;", "}"))
+  })
+
+  it("renders mutable properties", () => {
+    expect(
+      TypeBuilder.render(
+        Schema.Struct({
+          count: Schema.mutableKey(Schema.Number),
+        }),
+      ),
+    ).toBe(lines("{", "    count: number;", "}"))
+  })
+
+  it("renders symbol property keys", () => {
+    const token = Symbol("token")
+
+    expect(
+      TypeBuilder.render(
+        Schema.Struct({
+          [token]: Schema.String,
+        }),
+      ),
+    ).toBe(lines("{", '    readonly [Symbol.for("token")]: string;', "}"))
+  })
+
+  it("renders records", () => {
+    expect(
+      TypeBuilder.render(Schema.Record(Schema.String, Schema.Number)),
+    ).toBe(lines("{", "    [x: string]: number;", "}"))
+  })
+
+  it("renders structs with rest records", () => {
+    expect(
+      TypeBuilder.render(
+        Schema.StructWithRest(Schema.Struct({ name: Schema.String }), [
+          Schema.Record(Schema.String, Schema.Boolean),
+        ]),
+      ),
+    ).toBe(
+      lines(
+        "{",
+        "    readonly name: string;",
+        "    [x: string]: boolean;",
+        "}",
+      ),
+    )
+  })
+
+  it("renders documented fields", () => {
+    expect(
+      TypeBuilder.render(
+        Schema.Struct({
+          token: Schema.String.annotate({ documentation: "Primary token" }),
+        }),
+      ),
+    ).toBe(
+      lines(
+        "{",
+        "    /** Primary token */",
+        "    readonly token: string;",
+        "}",
+      ),
     )
   })
 })

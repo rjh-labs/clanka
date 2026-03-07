@@ -1,6 +1,9 @@
 import { Schema, SchemaAST as AST } from "effect"
 import * as ts from "typescript"
 
+const resolveDocumentation = AST.resolveAt<string>("documentation")
+const identifierPattern = /^[$A-Z_a-z][$0-9A-Z_a-z]*$/u
+
 const unknownTypeNode = (): ts.KeywordTypeNode =>
   ts.factory.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword)
 
@@ -73,6 +76,107 @@ const uniqueSymbolTypeNode = (ast: AST.UniqueSymbol): ts.TypeNode => {
   )
 }
 
+const symbolExpression = (symbol: symbol): ts.Expression => {
+  const description = symbol.description
+
+  if (description === undefined) {
+    return ts.factory.createCallExpression(
+      ts.factory.createIdentifier("Symbol"),
+      undefined,
+      [],
+    )
+  }
+
+  return ts.factory.createCallExpression(
+    ts.factory.createPropertyAccessExpression(
+      ts.factory.createIdentifier("Symbol"),
+      "for",
+    ),
+    undefined,
+    [ts.factory.createStringLiteral(description)],
+  )
+}
+
+const propertyName = (name: PropertyKey): ts.PropertyName => {
+  switch (typeof name) {
+    case "string":
+      return identifierPattern.test(name)
+        ? ts.factory.createIdentifier(name)
+        : ts.factory.createStringLiteral(name)
+    case "number":
+      return ts.factory.createNumericLiteral(name)
+    case "symbol":
+      return ts.factory.createComputedPropertyName(symbolExpression(name))
+  }
+}
+
+const jsDocText = (documentation: string): string => {
+  const lines = documentation.replaceAll("*/", "*\\/").split(/\r?\n/u)
+
+  return lines.length === 1
+    ? `* ${lines[0]} `
+    : `*\n * ${lines.join("\n * ")}\n `
+}
+
+const withJsDoc = <T extends ts.Node>(
+  node: T,
+  documentation: string | undefined,
+): T => {
+  if (documentation === undefined) {
+    return node
+  }
+
+  ts.addSyntheticLeadingComment(
+    node,
+    ts.SyntaxKind.MultiLineCommentTrivia,
+    jsDocText(documentation),
+    true,
+  )
+
+  return node
+}
+
+const propertySignatureTypeElement = (
+  propertySignature: AST.PropertySignature,
+): ts.PropertySignature =>
+  withJsDoc(
+    ts.factory.createPropertySignature(
+      propertySignature.type.context?.isMutable === true
+        ? undefined
+        : [ts.factory.createModifier(ts.SyntaxKind.ReadonlyKeyword)],
+      propertyName(propertySignature.name),
+      AST.isOptional(propertySignature.type)
+        ? ts.factory.createToken(ts.SyntaxKind.QuestionToken)
+        : undefined,
+      toTypeNode(propertySignature.type),
+    ),
+    resolveDocumentation(propertySignature.type),
+  )
+
+const indexSignatureTypeElement = (
+  indexSignature: AST.IndexSignature,
+): ts.IndexSignatureDeclaration =>
+  ts.factory.createIndexSignature(
+    undefined,
+    [
+      ts.factory.createParameterDeclaration(
+        undefined,
+        undefined,
+        "x",
+        undefined,
+        toTypeNode(indexSignature.parameter),
+        undefined,
+      ),
+    ],
+    toTypeNode(indexSignature.type),
+  )
+
+const objectsTypeNode = (ast: AST.Objects): ts.TypeLiteralNode =>
+  ts.factory.createTypeLiteralNode([
+    ...ast.propertySignatures.map(propertySignatureTypeElement),
+    ...ast.indexSignatures.map(indexSignatureTypeElement),
+  ])
+
 const toTypeNode = (ast: AST.AST): ts.TypeNode => {
   switch (ast._tag) {
     case "String":
@@ -103,6 +207,8 @@ const toTypeNode = (ast: AST.AST): ts.TypeNode => {
       return literalTypeNode(ast)
     case "UniqueSymbol":
       return uniqueSymbolTypeNode(ast)
+    case "Objects":
+      return objectsTypeNode(ast)
     default:
       return unknownTypeNode()
   }
