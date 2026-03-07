@@ -1,5 +1,5 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node"
-import { Effect, Layer, pipe, Schema, Stream } from "effect"
+import { Effect, FileSystem, Layer, pipe, Schema, Stream } from "effect"
 import { Chat, Prompt, Tool, Toolkit } from "effect/unstable/ai"
 import { CodexAiClient } from "./Codex.ts"
 import { KeyValueStore } from "effect/unstable/persistence"
@@ -47,9 +47,12 @@ const ClientLayer = CodexAiClient.pipe(
 )
 
 Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem
   const renderer = yield* ToolkitRenderer
   const chat = yield* Chat.fromPrompt(process.argv[2]!)
   const toolkit = yield* Tools
+
+  const agentsMd = yield* fs.readFileString("AGENTS.md")
 
   const result = yield* Effect.gen(function* () {
     while (true) {
@@ -87,6 +90,8 @@ Effect.gen(function* () {
 - You only add comments when necessary.
 - You do the research before making changes.
 
+## Executing code
+
 Use the "execute" tool to run javascript code to interact with the system.
 Use \`console.log\` to print any output you need.
 Top level await is supported.
@@ -106,7 +111,10 @@ const content = await readFile({
 })
 console.log(content)
 \`\`\`
-`,
+
+## AGENTS.md
+
+${agentsMd}`,
     }),
   )
 
@@ -118,10 +126,11 @@ console.log(content)
     OpenAiLanguageModel.model("gpt-5.4", {
       store: false,
       reasoning: {
-        effort: "high",
+        effort: "xhigh",
         summary: "auto",
       },
     }).pipe(Layer.provide(ClientLayer)),
+    NodeServices.layer,
   ]),
   NodeRuntime.runMain,
 )
