@@ -43,6 +43,7 @@
     "@effect/platform-node": "4.0.0-beta.28",
     "@effect/vitest": "4.0.0-beta.28",
     "@linear/sdk": "^75.0.0",
+    "@types/node": "^25.3.5",
     "@typescript/native-preview": "7.0.0-dev.20260219.1",
     "effect": "4.0.0-beta.28",
     "husky": "^9.1.7",

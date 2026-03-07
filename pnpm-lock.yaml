@@ -33,6 +33,9 @@ importers:
       '@linear/sdk':
         specifier: ^75.0.0
         version: 75.0.0(graphql@16.13.1)
+      '@types/node':
+        specifier: ^25.3.5
+        version: 25.3.5
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260219.1
         version: 7.0.0-dev.20260219.1
