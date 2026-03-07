@@ -24,9 +24,8 @@ export class Executor extends ServiceMap.Service<
 >()("clanka/Executor") {
   static readonly layer = Layer.effect(
     Executor,
+    // oxlint-disable-next-line require-yield
     Effect.gen(function* () {
-      yield* Effect.log("Initializing Executor service...")
-
       const execute = Effect.fnUntraced(function* <
         Tools extends Record<string, Tool.Any>,
       >(options: {
@@ -54,7 +53,7 @@ ${options.script}
             ) as Tool.Handler<string>
             // oxlint-disable-next-line typescript/no-explicit-any
             sandbox[name] = function (params: any) {
-              return Effect.logInfo(`Invoking "${name}"`).pipe(
+              return Effect.logInfo(`Calling "${name}"`).pipe(
                 Effect.andThen(handler.handler(params, {})),
                 Effect.provideServices(handler.services),
                 runPromise,
@@ -62,9 +61,12 @@ ${options.script}
             }
           }
 
-          script.runInNewContext(sandbox)
+          script.runInNewContext(sandbox, {
+            timeout: 1000,
+          })
           yield* Effect.promise(sandbox.main)
         }).pipe(
+          Effect.timeout("3 minutes"),
           Effect.catchCause(Effect.logFatal),
           Effect.provideServiceEffect(Console.Console, makeConsole(output)),
           Effect.scoped,
