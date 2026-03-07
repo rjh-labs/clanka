@@ -60,12 +60,9 @@ ${options.script}
             }
           }
 
-          // @effect-diagnostics-next-line tryCatchInEffectGen:off
-          try {
-            script.runInNewContext(sandbox, {
-              timeout: 1000,
-            })
-          } catch {}
+          script.runInNewContext(sandbox, {
+            timeout: 1000,
+          })
           yield* Effect.promise(sandbox.main)
         }).pipe(
           Effect.timeout("3 minutes"),

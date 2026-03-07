@@ -29,13 +29,16 @@ const ToolsLayer = Tools.toLayer(
     const tools = yield* AgentTools
     return Tools.of({
       execute: ({ script }) => {
-        console.log("Executing script:", script)
-        return executor
-          .execute({
+        console.log("Executing script:")
+        console.log(script)
+        console.log("")
+        return pipe(
+          executor.execute({
             tools,
             script,
-          })
-          .pipe(Stream.mkString)
+          }),
+          Stream.mkString,
+        )
       },
     })
   }),
@@ -68,13 +71,16 @@ Effect.gen(function* () {
               process.stdout.write(part.delta)
               break
             case "text-end":
-              console.log("")
+              console.log("\n")
               break
             case "reasoning-delta":
               process.stdout.write(part.delta)
               break
             case "reasoning-end":
-              console.log("")
+              console.log("\n")
+              break
+            case "finish":
+              console.log("Tokens used:", part.usage, "\n")
               break
           }
           return Effect.void
