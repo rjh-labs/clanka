@@ -3,9 +3,11 @@ import {
   Console,
   Effect,
   Encoding,
+  flow,
   Layer,
   Option,
   Result,
+  Schedule,
   Schema,
   Semaphore,
   ServiceMap,
@@ -19,17 +21,16 @@ import { KeyValueStore } from "effect/unstable/persistence"
 
 export const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 export const ISSUER = "https://auth.openai.com"
-export const CODEX_API_BASE = "https://chatgpt.com/backend-api/codex"
 export const POLLING_SAFETY_MARGIN_MS = 3000
 export const TOKEN_EXPIRY_BUFFER_MS = 30_000
 export const STORE_PREFIX = "codex.auth/"
 export const STORE_TOKEN_KEY = "token"
 
-const DEVICE_CODE_URL = `${ISSUER}/api/accounts/deviceauth/usercode`
-const DEVICE_TOKEN_URL = `${ISSUER}/api/accounts/deviceauth/token`
-const TOKEN_URL = `${ISSUER}/oauth/token`
+const DEVICE_CODE_URL = `/api/accounts/deviceauth/usercode`
+const DEVICE_TOKEN_URL = `/api/accounts/deviceauth/token`
+const TOKEN_URL = `/oauth/token`
 const DEVICE_REDIRECT_URI = `${ISSUER}/deviceauth/callback`
-const DEVICE_VERIFICATION_URL = `${ISSUER}/codex/device`
+const DEVICE_VERIFICATION_URL = `/codex/device`
 const DEFAULT_DEVICE_POLL_INTERVAL_SECONDS = 5
 const DEFAULT_TOKEN_EXPIRY_SECONDS = 3600
 const ACCOUNT_ID_HEADER = "ChatGPT-Account-Id"
@@ -197,9 +198,6 @@ export const extractAccountIdFromToken = (
 ): Option.Option<string> =>
   parseJwtClaims(token).pipe(Option.flatMap(extractAccountIdFromClaims))
 
-const isSuccessfulStatus = (status: number): boolean =>
-  status >= 200 && status < 300
-
 const normalizePollInterval = (interval: string): number =>
   Math.max(
     Number.parseInt(interval, 10) || DEFAULT_DEVICE_POLL_INTERVAL_SECONDS,
@@ -235,22 +233,6 @@ const applyTokenHeaders = (
       ),
   })
 }
-
-const injectAuthHeaders = (
-  request: HttpClientRequest.HttpClientRequest,
-  auth: CodexAuth["Service"],
-): Effect.Effect<HttpClientRequest.HttpClientRequest> =>
-  auth.get.pipe(
-    Effect.map((token) => applyTokenHeaders(request, token)),
-    Effect.catch((error: CodexAuthError) =>
-      Effect.die(
-        new Error(
-          `Failed to inject Codex auth headers for ${request.method} ${request.url}: ${error.message}`,
-          { cause: error },
-        ),
-      ),
-    ),
-  )
 
 const toTokenDataFromResponse = (token: TokenResponse): TokenData =>
   new TokenData({
@@ -309,7 +291,16 @@ export class CodexAuth extends ServiceMap.Service<CodexAuth>()(
   {
     make: Effect.gen(function* () {
       const tokenStore = toTokenStore(yield* KeyValueStore.KeyValueStore)
-      const httpClient = yield* HttpClient.HttpClient
+      const httpClient = (yield* HttpClient.HttpClient).pipe(
+        HttpClient.mapRequest(flow(HttpClientRequest.prependUrl(ISSUER))),
+        HttpClient.filterStatusOk,
+        HttpClient.retryTransient({
+          times: 5,
+          schedule: Schedule.exponential(150).pipe(
+            Schedule.either(Schedule.spaced(5000)),
+          ),
+        }),
+      )
       const semaphore = Semaphore.makeUnsafe(1)
 
       let currentToken = yield* tokenStore.get(STORE_TOKEN_KEY).pipe(
@@ -345,7 +336,7 @@ export class CodexAuth extends ServiceMap.Service<CodexAuth>()(
       const authenticateWithDeviceFlow = Effect.gen(function* () {
         const deviceCode = yield* requestDeviceCode
         yield* Console.log(
-          `Open ${DEVICE_VERIFICATION_URL} and enter code: ${deviceCode.userCode}`,
+          `Open ${ISSUER}${DEVICE_VERIFICATION_URL} and enter code: ${deviceCode.userCode}`,
         )
         const authorization = yield* pollAuthorization(deviceCode)
         return yield* exchangeAuthorizationCode(authorization)
@@ -412,12 +403,6 @@ export class CodexAuth extends ServiceMap.Service<CodexAuth>()(
           ),
         )
 
-        if (!isSuccessfulStatus(response.status)) {
-          return yield* requestDeviceCodeError(
-            `Failed to request a Codex device authorization code: ${response.status}`,
-          )
-        }
-
         const payload = yield* HttpClientResponse.schemaBodyJson(
           DeviceCodeResponseSchema,
         )(response).pipe(
@@ -449,45 +434,35 @@ export class CodexAuth extends ServiceMap.Service<CodexAuth>()(
 
           const delayMs = deviceCode.intervalMs + POLLING_SAFETY_MARGIN_MS
 
-          const loop: Effect.Effect<AuthorizationCodeData, CodexAuthError> =
-            httpClient.execute(request).pipe(
-              Effect.mapError((cause) =>
-                requestDeviceCodeError(
-                  "Failed to poll Codex device authorization",
-                  cause,
-                ),
+          return yield* httpClient.execute(request).pipe(
+            Effect.retry({
+              while: (e) =>
+                e.response?.status === 403 || e.response?.status === 404,
+              schedule: Schedule.spaced(delayMs),
+            }),
+            Effect.mapError((cause) =>
+              requestDeviceCodeError(
+                "Failed to poll Codex device authorization",
+                cause,
               ),
-              Effect.flatMap((response) => {
-                if (response.status === 200) {
-                  return HttpClientResponse.schemaBodyJson(
-                    AuthorizationCodeResponseSchema,
-                  )(response).pipe(
-                    Effect.mapError((cause) =>
-                      requestDeviceCodeError(
-                        "Failed to decode the Codex authorization approval response",
-                        cause,
-                      ),
-                    ),
-                    Effect.map((payload) => ({
-                      authorizationCode: payload.authorization_code,
-                      codeVerifier: payload.code_verifier,
-                    })),
-                  )
-                }
-
-                if (response.status === 403 || response.status === 404) {
-                  return Effect.sleep(delayMs).pipe(Effect.andThen(loop))
-                }
-
-                return Effect.fail(
+            ),
+            Effect.flatMap((response) =>
+              HttpClientResponse.schemaBodyJson(
+                AuthorizationCodeResponseSchema,
+              )(response).pipe(
+                Effect.mapError((cause) =>
                   requestDeviceCodeError(
-                    `Codex device authorization failed while polling: ${response.status}`,
+                    "Failed to decode the Codex authorization approval response",
+                    cause,
                   ),
-                )
-              }),
-            )
-
-          return yield* loop
+                ),
+                Effect.map((payload) => ({
+                  authorizationCode: payload.authorization_code,
+                  codeVerifier: payload.code_verifier,
+                })),
+              ),
+            ),
+          )
         },
       )
 
@@ -512,12 +487,6 @@ export class CodexAuth extends ServiceMap.Service<CodexAuth>()(
             ),
           ),
         )
-
-        if (!isSuccessfulStatus(response.status)) {
-          return yield* tokenExchangeError(
-            `Codex token exchange failed: ${response.status}`,
-          )
-        }
 
         const payload = yield* HttpClientResponse.schemaBodyJson(
           TokenResponseSchema,
@@ -551,12 +520,6 @@ export class CodexAuth extends ServiceMap.Service<CodexAuth>()(
           ),
         )
 
-        if (!isSuccessfulStatus(response.status)) {
-          return yield* refreshTokenError(
-            `Codex token refresh failed: ${response.status}`,
-          )
-        }
-
         const payload = yield* HttpClientResponse.schemaBodyJson(
           TokenResponseSchema,
         )(response).pipe(
@@ -587,11 +550,15 @@ export class CodexAuth extends ServiceMap.Service<CodexAuth>()(
       const auth = yield* CodexAuth
       const httpClient = yield* HttpClient.HttpClient
 
-      return httpClient.pipe(
-        HttpClient.mapRequestEffect((request) =>
-          injectAuthHeaders(request, auth),
-        ),
-      )
+      const injectAuthHeaders = (
+        request: HttpClientRequest.HttpClientRequest,
+      ): Effect.Effect<HttpClientRequest.HttpClientRequest> =>
+        auth.get.pipe(
+          Effect.map((token) => applyTokenHeaders(request, token)),
+          Effect.orDie,
+        )
+
+      return httpClient.pipe(HttpClient.mapRequestEffect(injectAuthHeaders))
     }),
   )
 
