@@ -133,7 +133,7 @@ ${agentsMd}`,
     OpenAiLanguageModel.model("gpt-5.4", {
       store: false,
       reasoning: {
-        effort: "medium",
+        effort: "low",
         summary: "auto",
       },
     }).pipe(Layer.provide(ClientLayer)),
