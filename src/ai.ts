@@ -91,6 +91,8 @@ You have the following functions available to you:
 
 \`\`\`ts
 ${renderer.render(AgentTools)}
+
+declare const fetch: typeof globalThis.fetch
 \`\`\`
 
 An example script to read a file:

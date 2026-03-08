@@ -45,6 +45,7 @@ ${options.script}
           const sandbox: ScriptSandbox = {
             main: defaultMain,
             console,
+            fetch,
             process: undefined,
           }
 

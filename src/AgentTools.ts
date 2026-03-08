@@ -98,14 +98,6 @@ export const AgentTools = Toolkit.make(
     success: Schema.String,
     dependencies: [CurrentDirectory],
   }),
-  Tool.make("httpGet", {
-    description: "Fetch a URL and return its text response.",
-    parameters: Schema.Struct({
-      url: Schema.String,
-      headers: Schema.optionalKey(Schema.Record(Schema.String, Schema.String)),
-    }),
-    success: Schema.String,
-  }),
   Tool.make("removeFile", {
     description: "Remove a file at the given path.",
     parameters: Schema.String.annotate({
@@ -253,18 +245,6 @@ export const AgentToolHandlers = AgentTools.toLayer(
         Effect.scoped,
         Effect.orDie,
       ),
-      httpGet: Effect.fn("AgentTools.httpGet")(function* (options) {
-        yield* Effect.logInfo(`Calling "httpGet"`).pipe(
-          Effect.annotateLogs({ url: options.url }),
-        )
-        const init =
-          options.headers === undefined
-            ? undefined
-            : { headers: options.headers }
-        return yield* Effect.promise(() =>
-          fetch(options.url, init).then((r) => r.text()),
-        )
-      }),
       sleep: Effect.fn("AgentTools.sleep")(function* (ms) {
         yield* Effect.logInfo(`Calling "sleep" for ${ms}ms`)
         return yield* Effect.sleep(ms)
