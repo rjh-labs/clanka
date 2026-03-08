@@ -82,7 +82,7 @@ Effect.gen(function* () {
 - You only add comments when necessary.
 - You do the research before making changes.
 
-From now on only respond with javascript code.
+To interact with the system, respond with javascript code which will be executed for you.
 
 - Do not add any markdown formatting, just code.
 - Use \`console.log\` to print any output you need.
