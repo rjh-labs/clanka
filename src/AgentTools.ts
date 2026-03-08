@@ -34,7 +34,8 @@ export const AgentTools = Toolkit.make(
       "Apply a patch across one or more files. Use this to add, delete or update files.",
     parameters: Schema.String.annotate({
       identifier: "patchText",
-      documentation: "Wrapped patch with Add/Delete/Update sections.",
+      documentation:
+        "Wrapped patch with Add/Delete/Update sections. Make sure to escape backticks \\` if using js template strings.",
     }),
     success: Schema.String,
     dependencies: [CurrentDirectory],
@@ -219,8 +220,6 @@ export const AgentToolHandlers = AgentTools.toLayer(
       applyPatch: Effect.fn("AgentTools.applyPatch")(function* (patchText) {
         yield* Effect.logInfo(`Calling "applyPatch"`)
         const cwd = yield* CurrentDirectory
-        // const err = (cause: unknown) =>
-        //   cause instanceof Error ? cause : new Error(String(cause))
         const fail = (path: string, reason: "delete" | "update") =>
           Effect.fail(
             new ApplyPatchError({

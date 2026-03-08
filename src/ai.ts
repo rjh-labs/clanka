@@ -44,7 +44,7 @@ Effect.gen(function* () {
         console.log("Result:")
         console.log(result.slice(0, 1000))
         prompt = Prompt.make([
-          { role: "user", content: `Javascript output:\n` },
+          { role: "user", content: `Javascript output:\n\n${result}` },
         ])
         output = ""
       }
