@@ -3,6 +3,10 @@
 - The base branch for this repository is `master`.
 - The package manager used is `pnpm`.
 
+# Validations
+
+Run `pnpm check` after making changes.
+
 # Specifications
 
 To learn more about previous and current specifications for this project, see
