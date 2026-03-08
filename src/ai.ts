@@ -67,6 +67,11 @@ ${agentsMd}`,
         prompt = Prompt.concat(prompt, `Javascript output:\n\n${result}`)
         output = ""
       }
+
+      if (Deferred.isDoneUnsafe(deferred)) {
+        return yield* Deferred.await(deferred)
+      }
+
       let response = Array.empty<StreamPart<{}>>()
       yield* pipe(
         ai.streamText({ prompt }),
@@ -106,7 +111,6 @@ ${agentsMd}`,
       output = output.trim()
     }
   }).pipe(
-    Effect.race(Deferred.await(deferred)),
     Effect.provideService(CurrentDirectory, process.cwd()),
     Effect.provideService(TaskCompleteDeferred, deferred),
     OpenAiLanguageModel.withConfigOverride({
