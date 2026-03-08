@@ -1,5 +1,5 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node"
-import { Deferred, Effect, FileSystem, Layer, pipe, Ref, Stream } from "effect"
+import { Deferred, Effect, FileSystem, Layer, pipe, Stream } from "effect"
 import { Chat, Prompt } from "effect/unstable/ai"
 import { CodexAiClient } from "./Codex.ts"
 import { KeyValueStore } from "effect/unstable/persistence"
@@ -41,24 +41,13 @@ Effect.gen(function* () {
           }),
           Stream.mkString,
         )
+        console.log("Result:")
+        console.log(result.slice(0, 1000))
         prompt = Prompt.make(result)
         output = ""
       }
       yield* pipe(
         chat.streamText({ prompt }),
-        Stream.map((part) => {
-          switch (part.type) {
-            case "text-delta":
-            case "reasoning-delta":
-              break
-            case "reasoning-end":
-              break
-            default:
-              console.log(part.type)
-              break
-          }
-          return part
-        }),
         Stream.takeUntil((part) => part.type === "text-end"),
         Stream.runForEach((part) => {
           switch (part.type) {
@@ -80,7 +69,6 @@ Effect.gen(function* () {
         Effect.tapCause(Effect.logError),
       )
       output = output.trim()
-      console.log(...(yield* Ref.get(chat.history)).content)
     }
   }).pipe(
     Effect.race(Deferred.await(deferred)),
@@ -135,7 +123,7 @@ ${agentsMd}`,
     OpenAiLanguageModel.model("gpt-5.4", {
       store: false,
       reasoning: {
-        effort: "high",
+        effort: "medium",
         summary: "auto",
       },
     }).pipe(Layer.provide(ClientLayer)),

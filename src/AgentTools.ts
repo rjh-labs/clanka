@@ -59,10 +59,10 @@ export const AgentTools = Toolkit.make(
     }),
     dependencies: [CurrentDirectory],
   }),
-  Tool.make("readdir", {
+  Tool.make("ls", {
     description: "List the contents of a directory",
     parameters: Schema.String.annotate({
-      identifier: "path",
+      identifier: "directory",
     }),
     success: Schema.Array(Schema.String),
     dependencies: [CurrentDirectory],
@@ -180,7 +180,7 @@ export const AgentToolHandlers = AgentTools.toLayer(
         const cwd = yield* CurrentDirectory
         yield* fs.remove(pathService.resolve(cwd, path))
       }, Effect.orDie),
-      readdir: Effect.fn("AgentTools.readdir")(function* (path) {
+      ls: Effect.fn("AgentTools.ls")(function* (path) {
         yield* Effect.logInfo(`Calling "readdir"`).pipe(
           Effect.annotateLogs({ path }),
         )
@@ -261,10 +261,9 @@ export const AgentToolHandlers = AgentTools.toLayer(
           options.headers === undefined
             ? undefined
             : { headers: options.headers }
-        const response = yield* Effect.promise(() =>
-          fetch(options.url, init),
+        return yield* Effect.promise(() =>
+          fetch(options.url, init).then((r) => r.text()),
         )
-        return yield* Effect.promise(() => response.text())
       }),
       sleep: Effect.fn("AgentTools.sleep")(function* (ms) {
         yield* Effect.logInfo(`Calling "sleep" for ${ms}ms`)

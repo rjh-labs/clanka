@@ -1,3 +1,4 @@
+import { NodeHttpClient } from "@effect/platform-node"
 import {
   Console,
   Effect,
@@ -10,7 +11,6 @@ import {
   ServiceMap,
 } from "effect"
 import {
-  FetchHttpClient,
   HttpClient,
   HttpClientRequest,
   HttpClientResponse,
@@ -613,6 +613,6 @@ export class CodexAuth extends ServiceMap.Service<CodexAuth>()(
 
   static readonly layerClient = this.layerClientNoDeps.pipe(
     Layer.provide(CodexAuth.layer),
-    Layer.provide(FetchHttpClient.layer),
+    Layer.provide(NodeHttpClient.layerUndici),
   )
 }
