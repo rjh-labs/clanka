@@ -69,7 +69,7 @@ ${output.summary}\n`
       }),
       Stream.catch((finished) =>
         Stream.succeed(
-          `\n${chalk.bold.green(`${subagentIcon} Task complete:\n\n${finished.summary}`)}`,
+          `\n${chalk.bold.green(`${subagentIcon} Task complete:`)}\n\n${finished.summary}`,
         ),
       ),
     )
