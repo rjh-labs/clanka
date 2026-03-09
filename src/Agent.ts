@@ -221,7 +221,10 @@ ${md}`),
         let response = Array.empty<StreamPart<{}>>()
         yield* pipe(
           ai.streamText({ prompt }),
-          Stream.takeUntil((part) => part.type === "text-end"),
+          Stream.takeUntil(
+            (part) =>
+              part.type === "text-end" && currentScript.trim().length > 0,
+          ),
           Stream.runForEachArray((parts) => {
             response.push(...parts)
             for (const part of parts) {
@@ -337,6 +340,7 @@ Javascript output:
 - Only add comments when necessary.
 - Repect the users AGENTS.md file and ALWAYS follow the instructions in it.
 - Use the "subagent" tool to delegate research / exploration tasks
+- When you have fully completed the task, call the "taskComplete" function
 `
 })
 

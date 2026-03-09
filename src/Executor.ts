@@ -5,9 +5,11 @@ import {
   Cause,
   Console,
   Effect,
-  FiberSet,
+  Exit,
+  Fiber,
   Layer,
   Queue,
+  Scope,
   ServiceMap,
   Stream,
 } from "effect"
@@ -40,11 +42,14 @@ export class Executor extends ServiceMap.Service<
         readonly script: string
       }) {
         const output = yield* Queue.unbounded<string, Cause.Done>()
+        const console = yield* makeConsole(output)
+        const handlerScope = Scope.makeUnsafe("parallel")
+        const trackFiber = Fiber.runIn(handlerScope)
 
         yield* Effect.gen(function* () {
           const console = yield* Console.Console
           const services = yield* Effect.services()
-          const runPromise = yield* FiberSet.makeRuntimePromise()
+          let running = 0
 
           const script = new NodeVm.Script(`async function main() {
 ${options.script}
@@ -60,11 +65,24 @@ ${options.script}
             const handler = services.mapUnsafe.get(
               tool.id,
             ) as Tool.Handler<string>
+
+            const handlerServices = ServiceMap.merge(services, handler.services)
+            const runFork = Effect.runForkWith(handlerServices)
+
             // oxlint-disable-next-line typescript/no-explicit-any
             sandbox[name] = function (params: any) {
-              return handler
-                .handler(params, {})
-                .pipe(Effect.provideServices(handler.services), runPromise)
+              running++
+              const fiber = trackFiber(runFork(handler.handler(params, {})))
+              return new Promise((resolve, reject) => {
+                fiber.addObserver((exit) => {
+                  running--
+                  if (exit._tag === "Success") {
+                    resolve(exit.value)
+                  } else {
+                    reject(Cause.squash(exit.cause))
+                  }
+                })
+              })
             }
           }
 
@@ -72,11 +90,15 @@ ${options.script}
             timeout: 1000,
           })
           yield* Effect.promise(sandbox.main)
+          while (true) {
+            yield* Effect.yieldNow
+            if (running === 0) break
+          }
         }).pipe(
+          Effect.ensuring(Scope.close(handlerScope, Exit.void)),
           Effect.timeout("3 minutes"),
           Effect.catchCause(Effect.logFatal),
-          Effect.provideServiceEffect(Console.Console, makeConsole(output)),
-          Effect.scoped,
+          Effect.provideService(Console.Console, console),
           Effect.ensuring(Queue.end(output)),
           Effect.forkScoped,
         )
