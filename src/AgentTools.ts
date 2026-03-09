@@ -16,7 +16,6 @@ import {
 import { Tool, Toolkit } from "effect/unstable/ai"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import * as Glob from "glob"
-import * as Rg from "@vscode/ripgrep"
 import { parsePatch, patchChunks } from "./ApplyPatch.ts"
 
 /**
@@ -304,7 +303,7 @@ export const AgentToolHandlers = AgentTools.toLayer(
         args.push(options.pattern)
         let stream = pipe(
           spawner.streamLines(
-            ChildProcess.make(Rg.rgPath, args, {
+            ChildProcess.make("rg", args, {
               cwd,
               stdin: "ignore",
             }),

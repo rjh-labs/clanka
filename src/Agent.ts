@@ -3,7 +3,6 @@
  */
 import {
   Array,
-  Data,
   Deferred,
   Effect,
   FileSystem,
@@ -143,34 +142,42 @@ export const make: <
     const taskServices = SubagentContext.serviceMap({
       spawn: ({ prompt }) => {
         let id = ++subagentId
-        return spawn(
+        const stream = spawn(
           Prompt.make(`You have been spawned using "subagent" to complete the following task:
 
 ${prompt}`),
-        ).pipe(
-          Stream.broadcast({
-            capacity: "unbounded",
-          }),
-          Effect.flatMap(
-            Effect.fnUntraced(function* (stream) {
-              const provider = yield* ProviderName
-              const model = yield* ModelName
-              Queue.offerUnsafe(
-                output,
-                new SubagentPart({
-                  id,
-                  prompt,
-                  provider,
-                  model,
-                  output: stream,
-                }),
-              )
-              return yield* Stream.runDrain(stream)
+        )
+        return Effect.gen(function* () {
+          const provider = yield* ProviderName
+          const model = yield* ModelName
+          Queue.offerUnsafe(
+            output,
+            new SubagentStart({ id, prompt, model, provider }),
+          )
+          return yield* stream.pipe(
+            Stream.runForEach((part) => {
+              switch (part._tag) {
+                case "SubagentStart":
+                case "SubagentComplete":
+                case "SubagentPart":
+                  return Effect.void
+
+                default:
+                  return Queue.offer(
+                    output,
+                    new SubagentPart({ id, part }),
+                  )
+              }
             }),
-          ),
-          Effect.scoped,
-          Effect.as(""),
-          Effect.catch((e) => Effect.succeed(e.summary)),
+            Effect.as(""),
+            Effect.catch((finished) =>
+              Queue.offer(
+                output,
+                new SubagentComplete({ id, summary: finished.summary }),
+              ).pipe(Effect.as(finished.summary)),
+            ),
+          )
+        }).pipe(
           options.subagentModel
             ? Effect.provide(Layer.orDie(options.subagentModel))
             : Effect.provideServices(services),
@@ -411,7 +418,40 @@ export class AgentFinished extends Schema.TaggedErrorClass<AgentFinished>()(
  * @since 1.0.0
  * @category Output
  */
-export const OutputPart = Schema.Union([
+export class SubagentStart extends Schema.TaggedClass<SubagentStart>()(
+  "SubagentStart",
+  {
+    id: Schema.Number,
+    prompt: Schema.String,
+    model: Schema.String,
+    provider: Schema.String,
+  },
+) {
+  get modelAndProvider() {
+    return `${this.provider}/${this.model}`
+  }
+}
+
+/**
+ * @since 1.0.0
+ * @category Output
+ */
+export class SubagentComplete extends Schema.TaggedClass<SubagentComplete>()(
+  "SubagentComplete",
+  {
+    id: Schema.Number,
+    summary: Schema.String,
+  },
+) {}
+
+export type ContentPart =
+  | ReasoningStart
+  | ReasoningDelta
+  | ReasoningEnd
+  | ScriptStart
+  | ScriptEnd
+
+export const ContentPart = Schema.Union([
   ReasoningStart,
   ReasoningDelta,
   ReasoningEnd,
@@ -423,26 +463,35 @@ export const OutputPart = Schema.Union([
  * @since 1.0.0
  * @category Output
  */
-export type OutputPart = typeof OutputPart.Type
+export class SubagentPart extends Schema.TaggedClass<SubagentPart>()(
+  "SubagentPart",
+  {
+    id: Schema.Number,
+    part: ContentPart,
+  },
+) {}
 
 /**
  * @since 1.0.0
  * @category Output
  */
-export class SubagentPart extends Data.TaggedError("SubagentPart")<{
-  id: number
-  prompt: string
-  model: string
-  provider: string
-  output: Stream.Stream<Output, AgentFinished>
-}> {
-  get modelAndProvider() {
-    return `${this.provider}/${this.model}`
-  }
-}
+export type Output =
+  | ContentPart
+  | SubagentStart
+  | SubagentComplete
+  | SubagentPart
 
 /**
  * @since 1.0.0
  * @category Output
  */
-export type Output = OutputPart | SubagentPart
+export const Output = Schema.Union([
+  ReasoningStart,
+  ReasoningDelta,
+  ReasoningEnd,
+  ScriptStart,
+  ScriptEnd,
+  SubagentStart,
+  SubagentComplete,
+  SubagentPart,
+])

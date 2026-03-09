@@ -1,8 +1,13 @@
 /**
  * @since 1.0.0
  */
-import { Effect, Sink, Stream } from "effect"
-import type { Output } from "./Agent.ts"
+import { Effect, Sink } from "effect"
+import {
+  type Output,
+  SubagentComplete,
+  SubagentPart,
+  SubagentStart,
+} from "./Agent.ts"
 import chalk from "chalk"
 
 /**
@@ -20,9 +25,9 @@ export type OutputFormatter<E = never, R = never> = Sink.Sink<
 const prettyPrefixed = (prefix: string): OutputFormatter =>
   Sink.suspend(() => {
     let hadReasoningDelta = false
-    return Sink.forEach((output) => {
-      switch (output._tag) {
-        case "SubagentPart": {
+    const renderOutput = (output: Output, prefix: string): Effect.Effect<void> => {
+      if (output instanceof SubagentPart) {
+        if (output.part instanceof SubagentStart) {
           console.log(
             chalkSubagentHeading(
               `${subagentIcon} Subagent #${output.id} starting (${output.modelAndProvider})`,
@@ -31,23 +36,23 @@ const prettyPrefixed = (prefix: string): OutputFormatter =>
           console.log("")
           console.log(chalk.dim(output.prompt))
           console.log("")
-          const prefix = chalk.magenta(`Subagent #${output.id}:`) + " "
-          return output.output.pipe(
-            Stream.run(prettyPrefixed(prefix)),
-            Effect.catch((finished) => {
-              console.log(
-                chalkSubagentHeading(
-                  `${subagentIcon} Subagent #${output.id} complete`,
-                ),
-              )
-              console.log("")
-              console.log(finished.summary)
-              console.log("")
-              return Effect.void
-            }),
-            Effect.forkChild,
-          )
+          return Effect.void
         }
+        if (output.part instanceof SubagentComplete) {
+          console.log(
+            chalkSubagentHeading(
+              `${subagentIcon} Subagent #${output.id} complete`,
+            ),
+          )
+          console.log("")
+          console.log(output.part.summary)
+          console.log("")
+          return Effect.void
+        }
+        const nextPrefix = chalk.magenta(`Subagent #${output.id}:`) + " "
+        return renderOutput(output.part, nextPrefix)
+      }
+      switch (output._tag) {
         case "ReasoningDelta": {
           process.stdout.write(output.delta)
           hadReasoningDelta = true
@@ -85,7 +90,8 @@ const prettyPrefixed = (prefix: string): OutputFormatter =>
         }
       }
       return Effect.void
-    })
+    }
+    return Sink.forEach((output) => renderOutput(output, prefix))
   })
 
 /**
