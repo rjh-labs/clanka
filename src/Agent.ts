@@ -105,6 +105,7 @@ export const make: <Tools extends Record<string, Tool.Any> = {}>(options: {
     system += `\n${options.system}`
   }
   const withSystemPrompt = OpenAiLanguageModel.withConfigOverride({
+    store: false,
     instructions: system,
   })
 
@@ -130,7 +131,7 @@ export const make: <Tools extends Record<string, Tool.Any> = {}>(options: {
             Effect.flatMap((stream) => {
               Queue.offerUnsafe(
                 output,
-                new SubagentPart({ id, output: stream }),
+                new SubagentPart({ id, prompt, output: stream }),
               )
               return Stream.runDrain(stream)
             }),
@@ -203,12 +204,16 @@ ${md}`),
                     currentScript += part.delta
                     break
                   case "reasoning-start":
+                    Queue.offerUnsafe(output, new ReasoningStart())
                     break
                   case "reasoning-delta":
-                    // process.stdout.write(part.delta)
+                    Queue.offerUnsafe(
+                      output,
+                      new ReasoningDelta({ delta: part.delta }),
+                    )
                     break
                   case "reasoning-end":
-                    // console.log("\n")
+                    Queue.offerUnsafe(output, new ReasoningEnd())
                     break
                   case "finish":
                     // console.log("Tokens used:", part.usage, "\n")
@@ -302,6 +307,7 @@ Javascript output:
 - Use the current state of the codebase to inform your decisions. Don't look at git history unless explicity asked to.
 - Only add comments when necessary.
 - Repect the users AGENTS.md file and ALWAYS follow the instructions in it.
+- Use the "subagent" tool to delegate research / exploration tasks
 `
 })
 
@@ -388,6 +394,7 @@ export type OutputPart = typeof OutputPart.Type
  */
 export class SubagentPart extends Data.TaggedError("SubagentPart")<{
   id: number
+  prompt: string
   output: Stream.Stream<Output, AgentFinished>
 }> {}
 
