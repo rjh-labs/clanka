@@ -144,7 +144,7 @@ export const make: <
   > = Effect.fnUntraced(function* (agentId, prompt) {
     const ai = yield* LanguageModel.LanguageModel
     const modelConfig = yield* AgentModelConfig
-    const singleToolMode = modelConfig.supportsNoTools !== false
+    const singleToolMode = modelConfig.supportsNoTools !== true
     const deferred = yield* Deferred.make<string>()
     const output = yield* Queue.make<Output, AgentFinished | AiError.AiError>()
 
