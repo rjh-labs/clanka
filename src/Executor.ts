@@ -79,6 +79,7 @@ ${options.script}
                   if (exit._tag === "Success") {
                     resolve(exit.value)
                   } else {
+                    if (Cause.hasInterruptsOnly(exit.cause)) return
                     reject(Cause.squash(exit.cause))
                   }
                 })
