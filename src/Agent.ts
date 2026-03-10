@@ -489,7 +489,7 @@ Javascript output:
 
 // oxlint-disable-next-line typescript/no-explicit-any
 const generateSystemMulti = (toolsDts: string) => {
-  return `You can interact with the system by writing plain javascript code (no typescript) that will be executed for you.
+  return `From now on only response with plain javascript code (no typescript) which will be executed for you.
 
 - Use \`console.log\` to print any output you need.
 - Top level await is supported.
