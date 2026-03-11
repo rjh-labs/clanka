@@ -1,8 +1,8 @@
 /**
  * @since 1.0.0
  */
-import { Stream } from "effect"
-import { type Output, AgentFinished } from "./Agent.ts"
+import { Effect, Layer, PubSub, Semaphore, ServiceMap, Stream } from "effect"
+import { type Agent, type Output, AgentFinished } from "./Agent.ts"
 import chalk from "chalk"
 
 /**
@@ -81,3 +81,72 @@ const scriptIcon = "\u{f0bc1}"
 const subagentIcon = "\u{ee0d} "
 const thinkingIcon = "\u{f07f6}"
 const doneIcon = "\u{eab2}"
+
+/**
+ * @since 1.0.0
+ * @category Muxer
+ */
+export class Muxer extends ServiceMap.Service<
+  Muxer,
+  {
+    add(agent: Agent): Effect.Effect<void>
+    readonly output: Stream.Stream<string>
+  }
+>()("clanka/OutputFormatter/Muxer") {}
+
+/**
+ * @since 1.0.0
+ * @category Muxer
+ */
+export const layerMuxer = (formatter: OutputFormatter) =>
+  Layer.effect(
+    Muxer,
+    Effect.gen(function* () {
+      const scope = yield* Effect.scope
+      const output = yield* PubSub.unbounded<string>()
+      let agentCount = 0
+      let currentAgentId: number | null = null
+      const semaphore = Semaphore.makeUnsafe(1)
+
+      return Muxer.of({
+        add(agent) {
+          const id = ++agentCount
+          return agent.output.pipe(
+            Stream.tap(
+              Effect.fnUntraced(function* (part_) {
+                if (currentAgentId === null || id !== currentAgentId) {
+                  yield* semaphore.take(1)
+                }
+                const part = part_._tag === "SubagentPart" ? part_.part : part_
+                switch (part._tag) {
+                  case "ReasoningStart":
+                  case "ScriptStart": {
+                    currentAgentId = id
+                    break
+                  }
+                  case "ReasoningEnd":
+                  case "ScriptEnd": {
+                    currentAgentId = null
+                    break
+                  }
+                }
+                if (id !== currentAgentId) {
+                  yield* semaphore.release(1)
+                }
+              }),
+            ),
+            formatter,
+            Stream.runIntoPubSub(output),
+            Effect.onExit(() => {
+              if (currentAgentId !== id) return Effect.void
+              currentAgentId = null
+              return semaphore.release(1)
+            }),
+            Effect.forkIn(scope),
+            Effect.asVoid,
+          )
+        },
+        output: Stream.fromPubSub(output),
+      })
+    }),
+  )
