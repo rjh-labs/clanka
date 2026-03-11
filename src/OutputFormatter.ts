@@ -2,7 +2,7 @@
  * @since 1.0.0
  */
 import { Effect, Layer, PubSub, Semaphore, ServiceMap, Stream } from "effect"
-import { type Agent, type Output, AgentFinished } from "./Agent.ts"
+import { type Output, AgentFinished } from "./Agent.ts"
 import chalk from "chalk"
 
 /**
@@ -89,7 +89,9 @@ const doneIcon = "\u{eab2}"
 export class Muxer extends ServiceMap.Service<
   Muxer,
   {
-    add(agent: Agent): Effect.Effect<void>
+    add<E, R>(
+      agent: Stream.Stream<Output, AgentFinished | E, R>,
+    ): Effect.Effect<void, never, R>
     readonly output: Stream.Stream<string>
   }
 >()("clanka/OutputFormatter/Muxer") {}
@@ -109,9 +111,9 @@ export const layerMuxer = (formatter: OutputFormatter) =>
       const semaphore = Semaphore.makeUnsafe(1)
 
       return Muxer.of({
-        add(agent) {
+        add(stream) {
           const id = ++agentCount
-          return agent.output.pipe(
+          return stream.pipe(
             Stream.tap(
               Effect.fnUntraced(function* (part_) {
                 if (currentAgentId === null || id !== currentAgentId) {
