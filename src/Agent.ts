@@ -237,10 +237,11 @@ ${prompt}`),
         return Effect.gen(function* () {
           const provider = yield* ProviderName
           const model = yield* ModelName
-          Queue.offerUnsafe(
-            output,
-            new SubagentStart({ id, prompt, model, provider }),
-          )
+          maybeSend({
+            agentId,
+            part: new SubagentStart({ id, prompt, model, provider }),
+            release: true,
+          })
           return yield* stream.pipe(
             Stream.runForEachArray((parts) => {
               for (const part of parts) {
