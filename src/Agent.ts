@@ -542,7 +542,7 @@ Javascript output:
 }
 
 const generateSystemMulti = (toolsDts: string) => {
-  return `From now on only respond with plain javascript code which will be executed for you.
+  return `You complete your tasks by **only writing javascript code** to interact with your environment.
 
 - Use \`console.log\` to print any output you need.
 - Top level await is supported.
