@@ -248,6 +248,48 @@ describe("AgentTools", () => {
     ),
   )
 
+  it.effect("applies wrapped apply_patch patches without an end marker", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem
+      const tempRoot = yield* makeTempRoot("clanka-apply-patch-wrapped-no-end-")
+      yield* fs.makeDirectory(join(tempRoot, "src"), { recursive: true })
+      yield* fs.writeFileString(join(tempRoot, "src", "app.txt"), "old\n")
+
+      const executor = yield* Executor
+      const tools = yield* AgentTools
+      const output = yield* executor
+        .execute({
+          tools,
+          script: [
+            "const output = await applyPatch(`",
+            "*** Begin Patch",
+            "*** Update File: src/app.txt",
+            "@@",
+            "-old",
+            "+new",
+            "`)",
+            "console.log(output)",
+          ].join("\n"),
+        })
+        .pipe(
+          Stream.mkString,
+          Effect.provideServices(makeContextNoop(tempRoot)),
+        )
+
+      expect(output).toContain("M src/app.txt")
+      expect(yield* fs.readFileString(join(tempRoot, "src", "app.txt"))).toBe(
+        "new\n",
+      )
+    }).pipe(
+      Effect.provide([
+        AgentToolHandlers,
+        Executor.layer,
+        ToolkitRenderer.layer,
+      ]),
+      Effect.provide(NodeServices.layer),
+    ),
+  )
+
   it.effect(
     "applies larger wrapped apply_patch patches across multiple files",
     () =>

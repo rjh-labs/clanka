@@ -28,6 +28,50 @@ describe("patchContent", () => {
     ).toBe("alpha\nbeta\nomega\n")
   })
 
+  it("parses wrapped patches without an end marker at EOF", () => {
+    expect(
+      parsePatch(
+        [
+          "*** Begin Patch",
+          "*** Update File: src/ExaSearch.ts",
+          "@@",
+          " export class ExaSearch extends ServiceMap.Service<",
+          "   ExaSearch,",
+          "   {",
+          "-    search(query: string): Effect.Effect<Array<SearchResponse<{}>>, ExaError>",
+          "+    search(query: string): Effect.Effect<SearchResponse<{}>, ExaError>",
+          "   }",
+          ' >()("clanka/ExaSearch") {}',
+        ].join("\n"),
+      ),
+    ).toEqual([
+      {
+        type: "update",
+        path: "src/ExaSearch.ts",
+        chunks: [
+          {
+            old: [
+              "export class ExaSearch extends ServiceMap.Service<",
+              "  ExaSearch,",
+              "  {",
+              "    search(query: string): Effect.Effect<Array<SearchResponse<{}>>, ExaError>",
+              "  }",
+              '>()("clanka/ExaSearch") {}',
+            ],
+            next: [
+              "export class ExaSearch extends ServiceMap.Service<",
+              "  ExaSearch,",
+              "  {",
+              "    search(query: string): Effect.Effect<SearchResponse<{}>, ExaError>",
+              "  }",
+              '>()("clanka/ExaSearch") {}',
+            ],
+          },
+        ],
+      },
+    ])
+  })
+
   it("parses multi-file wrapped patches", () => {
     expect(
       parsePatch(
