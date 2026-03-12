@@ -1,5 +1,11 @@
 # clanka
 
+## 0.0.28
+
+### Patch Changes
+
+- [`d10f450`](https://github.com/Effectful-Tech/clanka/commit/d10f4509c2f8e58795c2210512751f3a05e10f95) Thanks [@tim-smart](https://github.com/tim-smart)! - fix toolkit types
+
 ## 0.0.27
 
 ### Patch Changes
