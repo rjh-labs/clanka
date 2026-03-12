@@ -13,11 +13,14 @@ import {
   Path,
   pipe,
   Queue,
+  Result,
+  Schema,
   Scope,
   ServiceMap,
   Stream,
 } from "effect"
 import { Tool, Toolkit } from "effect/unstable/ai"
+import { Rpc, RpcClient, RpcGroup, RpcServer } from "effect/unstable/rpc"
 import * as NodeConsole from "node:console"
 import * as NodeVm from "node:vm"
 import { Writable } from "node:stream"
@@ -180,6 +183,50 @@ ${opts.script}
 
 /**
  * @since 1.0.0
+ * @category Constructors
+ */
+export const makeRpc = Effect.gen(function* () {
+  const client = yield* RpcClient.make(Rpcs, {
+    spanPrefix: "AgentExecutorClient",
+  })
+
+  return AgentExecutor.of({
+    toolsDts: Effect.orDie(client.toolsDts()),
+    agentsMd: Effect.orDie(client.agentsMd()),
+    execute: (opts) =>
+      Scope.Scope.useSync((scope) =>
+        client.execute({ script: opts.script }).pipe(
+          Stream.tap((part) => {
+            switch (part._tag) {
+              case "Text": {
+                return Effect.void
+              }
+              case "TaskComplete": {
+                return opts.onTaskComplete(part.summary)
+              }
+              case "Subagent": {
+                const id = part.id
+                return pipe(
+                  opts.onSubagent(part.prompt),
+                  Effect.flatMap((output) =>
+                    client.subagentOutput({ id, output }),
+                  ),
+                  Effect.forkIn(scope),
+                )
+              }
+            }
+          }),
+          Stream.orDie,
+          Stream.filterMap((part) =>
+            part._tag === "Text" ? Result.succeed(part.text) : Result.failVoid,
+          ),
+        ),
+      ).pipe(Stream.unwrap),
+  })
+})
+
+/**
+ * @since 1.0.0
  * @category Layers
  */
 export const layerLocal = <Toolkit extends Toolkit.Any = never>(options: {
@@ -202,6 +249,154 @@ export const layerLocal = <Toolkit extends Toolkit.Any = never>(options: {
   Layer.effect(AgentExecutor, makeLocal(options)).pipe(
     Layer.provide([AgentToolHandlers, ToolkitRenderer.layer]),
   )
+
+/**
+ * Create an AgentExecutor that communicates with a remote RpcServer serving the
+ * AgentExecutor protocol.
+ *
+ * @since 1.0.0
+ * @category Layers
+ */
+export const layerRpc: Layer.Layer<AgentExecutor, never, RpcClient.Protocol> =
+  Layer.effect(AgentExecutor, makeRpc)
+
+/**
+ * Create a RpcServer that serves the AgentExecutor rpc protocol.
+ *
+ * This can be used to run the AgentExecutor in a remote location.
+ *
+ * @since 1.0.0
+ * @category Layers
+ */
+export const layerRpcServer = <Toolkit extends Toolkit.Any = never>(options: {
+  readonly directory: string
+  readonly tools?: Toolkit | undefined
+}): Layer.Layer<
+  never,
+  never,
+  | RpcServer.Protocol
+  | FileSystem.FileSystem
+  | HttpClient
+  | Path.Path
+  | ChildProcessSpawner
+  | Exclude<
+      Toolkit extends Toolkit.Toolkit<infer T>
+        ? Tool.HandlersFor<T> | Tool.HandlerServices<T[keyof T]>
+        : never,
+      CurrentDirectory | SubagentExecutor | TaskCompleter
+    >
+> =>
+  RpcServer.layer(Rpcs, {
+    spanPrefix: "AgentExecutorServer",
+    disableFatalDefects: true,
+  }).pipe(
+    Layer.provide(
+      Rpcs.toLayer(
+        Effect.gen(function* () {
+          const local = yield* makeLocal(options)
+          const subagentResumes = new Map<
+            number,
+            (effect: Effect.Effect<string>) => void
+          >()
+
+          return Rpcs.of({
+            agentsMd: () => local.agentsMd,
+            toolsDts: () => local.toolsDts,
+            subagentOutput: ({ id, output }) => {
+              const resume = subagentResumes.get(id)
+              if (resume) {
+                resume(Effect.succeed(output))
+                subagentResumes.delete(id)
+              }
+              return Effect.void
+            },
+            execute: Effect.fnUntraced(function* ({ script }) {
+              const queue = yield* Queue.unbounded<
+                typeof ExecuteOutput.Type,
+                Cause.Done
+              >()
+              let subagentId = 0
+
+              yield* pipe(
+                local.execute({
+                  script,
+                  onTaskComplete(summary) {
+                    return Queue.offer(queue, {
+                      _tag: "TaskComplete",
+                      summary,
+                    })
+                  },
+                  onSubagent(prompt) {
+                    const id = subagentId++
+                    return Effect.callback((resume) => {
+                      subagentResumes.set(id, resume)
+                      Queue.offerUnsafe(queue, {
+                        _tag: "Subagent",
+                        id,
+                        prompt,
+                      })
+                      return Effect.sync(() => {
+                        subagentResumes.delete(id)
+                      })
+                    })
+                  },
+                }),
+                Stream.runForEachArray((parts) => {
+                  for (const part of parts) {
+                    Queue.offerUnsafe(queue, {
+                      _tag: "Text",
+                      text: part,
+                    })
+                  }
+                  return Effect.void
+                }),
+                Effect.forkScoped,
+              )
+
+              return queue
+            }),
+          })
+        }),
+      ),
+    ),
+    Layer.provide([AgentToolHandlers, ToolkitRenderer.layer]),
+  )
+
+/**
+ * @since 1.0.0
+ * @category Rpcs
+ */
+export const ExecuteOutput = Schema.TaggedUnion({
+  Text: { text: Schema.String },
+  TaskComplete: { summary: Schema.String },
+  Subagent: { id: Schema.Finite, prompt: Schema.String },
+})
+
+/**
+ * @since 1.0.0
+ * @category Rpcs
+ */
+export class Rpcs extends RpcGroup.make(
+  Rpc.make("toolsDts", {
+    success: Schema.String,
+  }),
+  Rpc.make("agentsMd", {
+    success: Schema.Option(Schema.String),
+  }),
+  Rpc.make("subagentOutput", {
+    payload: {
+      id: Schema.Finite,
+      output: Schema.String,
+    },
+  }),
+  Rpc.make("execute", {
+    payload: Schema.Struct({
+      script: Schema.String,
+    }),
+    success: ExecuteOutput,
+    stream: true,
+  }),
+) {}
 
 // ------------------------------------------
 // Internal
