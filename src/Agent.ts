@@ -534,7 +534,6 @@ const defaultSystem = (options: {
 - **Fully read and understand your task** before proceeding.
 - Use the current state of the codebase to inform your decisions. Don't look at git history unless explicity asked to.
 - Only add comments when necessary.
-- Make use of the "delegate" tool to delegate work, exploration and small research tasks. You can delegate multiple tasks in parallel with Promise.all
 
 ${options.toolInstructions}
 
@@ -592,6 +591,7 @@ const systemToolsCommon = (
 - AVOID passing scripts into the "bash" function, and instead write javascript.
 - PREFER the "search" function over "rg" for finding information or code
 - Variables **are not shared** between executions, so you must include all necessary code in each script you execute.
+- Make use of the "delegate" tool to delegate exploration and small research tasks. You can delegate multiple tasks in parallel with Promise.all
 
 **When you have fully completed your task**, call the "taskComplete" function with the final output.
 Make sure every detail of the task is done before calling "taskComplete".
