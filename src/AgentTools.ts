@@ -1,25 +1,25 @@
 /**
  * @since 1.0.0
  */
-import {
-  Array,
-  Data,
-  Effect,
-  FileSystem,
-  Layer,
-  Path,
-  pipe,
-  Schema,
-  ServiceMap,
-  Stream,
-} from "effect"
-import { Tool, Toolkit } from "effect/unstable/ai"
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import * as Glob from "glob"
 import { parsePatch, patchChunks } from "./ApplyPatch.ts"
 import * as ExaSearch from "./ExaSearch.ts"
 import * as WebToMarkdown from "./WebToMarkdown.ts"
-import type { HttpClient } from "effect/unstable/http/HttpClient"
+import type * as HttpClient from "effect/unstable/http/HttpClient"
+import * as ServiceMap from "effect/ServiceMap"
+import * as Effect from "effect/Effect"
+import * as Toolkit from "effect/unstable/ai/Toolkit"
+import * as Tool from "effect/unstable/ai/Tool"
+import * as Schema from "effect/Schema"
+import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner"
+import * as FileSystem from "effect/FileSystem"
+import * as Path from "effect/Path"
+import * as ChildProcess from "effect/unstable/process/ChildProcess"
+import * as Stream from "effect/Stream"
+import { pipe } from "effect/Function"
+import * as Array from "effect/Array"
+import * as Data from "effect/Data"
+import * as Layer from "effect/Layer"
 
 /**
  * @since 1.0.0
@@ -93,7 +93,7 @@ export const AgentTools = Toolkit.make(
   }),
   Tool.make("applyPatch", {
     description:
-      "Apply a git diff / unified diff patch, or a wrapped apply_patch patch, across one or more files.",
+      "Apply a git diff / unified diff patch, or a wrapped patch, across one or more files.",
     parameters: Schema.String.annotate({
       identifier: "patch",
     }),
@@ -414,7 +414,7 @@ export const AgentToolHandlersNoDeps = AgentTools.toLayer(
               readonly path: string
             }
         >
-        const out = [] as string[]
+        const out = [] as Array<string>
         const rel = (path: string) =>
           pathService.relative(cwd, path).replaceAll("\\", "/")
         const load = Effect.fn("AgentTools.applyPatch.load")(function* (
@@ -558,7 +558,7 @@ export const AgentToolHandlers: Layer.Layer<
   | FileSystem.FileSystem
   | Path.Path
   | ChildProcessSpawner.ChildProcessSpawner
-  | HttpClient
+  | HttpClient.HttpClient
 > = AgentToolHandlersNoDeps.pipe(
   Layer.provide([ExaSearch.layer, WebToMarkdown.layer]),
 )

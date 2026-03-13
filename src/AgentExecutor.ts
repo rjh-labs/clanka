@@ -1,26 +1,6 @@
 /**
  * @since 1.0.0
  */
-import {
-  Cause,
-  Console,
-  Effect,
-  Exit,
-  Fiber,
-  FileSystem,
-  Layer,
-  Option,
-  Path,
-  pipe,
-  Queue,
-  Result,
-  Schema,
-  Scope,
-  ServiceMap,
-  Stream,
-} from "effect"
-import { Tool, Toolkit } from "effect/unstable/ai"
-import { Rpc, RpcClient, RpcGroup, RpcServer } from "effect/unstable/rpc"
 import * as NodeConsole from "node:console"
 import * as NodeVm from "node:vm"
 import { Writable } from "node:stream"
@@ -32,8 +12,30 @@ import {
   TaskCompleter,
 } from "./AgentTools.ts"
 import { ToolkitRenderer } from "./ToolkitRenderer.ts"
-import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
-import type { HttpClient } from "effect/unstable/http/HttpClient"
+import type * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner"
+import type * as HttpClient from "effect/unstable/http/HttpClient"
+import * as ServiceMap from "effect/ServiceMap"
+import * as Effect from "effect/Effect"
+import type * as Option from "effect/Option"
+import * as Stream from "effect/Stream"
+import * as FileSystem from "effect/FileSystem"
+import * as Toolkit from "effect/unstable/ai/Toolkit"
+import * as Path from "effect/Path"
+import type * as Tool from "effect/unstable/ai/Tool"
+import * as Queue from "effect/Queue"
+import * as Cause from "effect/Cause"
+import * as Scope from "effect/Scope"
+import * as Fiber from "effect/Fiber"
+import * as Console from "effect/Console"
+import * as Exit from "effect/Exit"
+import { pipe } from "effect/Function"
+import * as RpcClient from "effect/unstable/rpc/RpcClient"
+import * as Layer from "effect/Layer"
+import * as RpcServer from "effect/unstable/rpc/RpcServer"
+import * as Schema from "effect/Schema"
+import * as RpcGroup from "effect/unstable/rpc/RpcGroup"
+import * as Rpc from "effect/unstable/rpc/Rpc"
+import * as Result from "effect/Result"
 
 /**
  * @since 1.0.0
@@ -237,8 +239,8 @@ export const layerLocal = <Toolkit extends Toolkit.Any = never>(options: {
   never,
   | FileSystem.FileSystem
   | Path.Path
-  | ChildProcessSpawner
-  | HttpClient
+  | ChildProcessSpawner.ChildProcessSpawner
+  | HttpClient.HttpClient
   | Exclude<
       Toolkit extends Toolkit.Toolkit<infer T>
         ? Tool.HandlersFor<T> | Tool.HandlerServices<T[keyof T]>
@@ -276,9 +278,9 @@ export const layerRpcServer = <Toolkit extends Toolkit.Any = never>(options: {
   never,
   | RpcServer.Protocol
   | FileSystem.FileSystem
-  | HttpClient
+  | HttpClient.HttpClient
   | Path.Path
-  | ChildProcessSpawner
+  | ChildProcessSpawner.ChildProcessSpawner
   | Exclude<
       Toolkit extends Toolkit.Toolkit<infer T>
         ? Tool.HandlersFor<T> | Tool.HandlerServices<T[keyof T]>

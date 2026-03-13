@@ -1,10 +1,15 @@
 /**
  * @since 1.0.0
  */
-import { Effect, Layer, PubSub, Semaphore, ServiceMap, Stream } from "effect"
-import { type Output, AgentFinished } from "./Agent.ts"
+import * as Effect from "effect/Effect"
+import * as Layer from "effect/Layer"
+import * as PubSub from "effect/PubSub"
+import * as Semaphore from "effect/Semaphore"
+import * as ServiceMap from "effect/ServiceMap"
+import * as Stream from "effect/Stream"
+import type { AgentFinished, Output } from "./Agent.ts"
 import chalk from "chalk"
-import type { Prompt } from "effect/unstable/ai"
+import type * as Prompt from "effect/unstable/ai/Prompt"
 
 /**
  * @since 1.0.0
@@ -78,7 +83,7 @@ ${output.summary}\n\n`
   )
 
 const promptToString = (prompt: Prompt.Prompt): string => {
-  let textParts: string[] = []
+  let textParts: Array<string> = []
   for (const message of prompt.content) {
     if (message.role !== "user") continue
     let content = message.content

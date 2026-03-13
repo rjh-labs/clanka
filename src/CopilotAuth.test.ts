@@ -1,11 +1,15 @@
 import { assert, describe, it } from "@effect/vitest"
-import { Deferred, Effect, Fiber, Option, Ref } from "effect"
+import * as Deferred from "effect/Deferred"
+import * as Effect from "effect/Effect"
+import * as Fiber from "effect/Fiber"
+import * as Option from "effect/Option"
+import * as Ref from "effect/Ref"
 import {
   HttpClient,
   HttpClientRequest,
   HttpClientResponse,
 } from "effect/unstable/http"
-import { KeyValueStore } from "effect/unstable/persistence"
+import * as KeyValueStore from "effect/unstable/persistence/KeyValueStore"
 import {
   COPILOT_VISION_REQUEST_HEADER,
   DEFAULT_OPENAI_INTENT,

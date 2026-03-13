@@ -638,7 +638,7 @@ export const patchChunks = (
   }
 
   const out = [...lines]
-  for (const [at, size, next] of compute(file, lines, chunks).reverse()) {
+  for (const [at, size, next] of compute(file, lines, chunks).toReversed()) {
     out.splice(at, size, ...next)
   }
 

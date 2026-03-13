@@ -1,4 +1,5 @@
-import { Schema, SchemaAST as AST } from "effect"
+import * as AST from "effect/SchemaAST"
+import type * as Schema from "effect/Schema"
 
 const resolveDocumentation = AST.resolveAt<string>("documentation")
 const identifierPattern = /^[$A-Z_a-z][$0-9A-Z_a-z]*$/u

@@ -1,25 +1,21 @@
 /**
  * @since 1.0.0
  */
-import {
-  Console,
-  Effect,
-  Encoding,
-  flow,
-  Layer,
-  Option,
-  Result,
-  Schedule,
-  Schema,
-  Semaphore,
-  ServiceMap,
-} from "effect"
-import {
-  HttpClient,
-  HttpClientRequest,
-  HttpClientResponse,
-} from "effect/unstable/http"
-import { KeyValueStore } from "effect/unstable/persistence"
+import * as Console from "effect/Console"
+import * as Effect from "effect/Effect"
+import * as Encoding from "effect/Encoding"
+import * as Function from "effect/Function"
+import * as Layer from "effect/Layer"
+import * as Option from "effect/Option"
+import * as Result from "effect/Result"
+import * as Schedule from "effect/Schedule"
+import * as Schema from "effect/Schema"
+import * as Semaphore from "effect/Semaphore"
+import * as ServiceMap from "effect/ServiceMap"
+import * as HttpClient from "effect/unstable/http/HttpClient"
+import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest"
+import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse"
+import * as KeyValueStore from "effect/unstable/persistence/KeyValueStore"
 
 export const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 export const ISSUER = "https://auth.openai.com"
@@ -299,7 +295,9 @@ export class CodexAuth extends ServiceMap.Service<
   static readonly make = Effect.gen(function* () {
     const tokenStore = toTokenStore(yield* KeyValueStore.KeyValueStore)
     const httpClient = (yield* HttpClient.HttpClient).pipe(
-      HttpClient.mapRequest(flow(HttpClientRequest.prependUrl(ISSUER))),
+      HttpClient.mapRequest(
+        Function.flow(HttpClientRequest.prependUrl(ISSUER)),
+      ),
       HttpClient.filterStatusOk,
       HttpClient.retryTransient({
         times: 5,

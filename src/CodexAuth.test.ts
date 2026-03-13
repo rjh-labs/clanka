@@ -1,11 +1,16 @@
 import { assert, describe, it } from "@effect/vitest"
-import { Deferred, Effect, Encoding, Fiber, Option, Ref } from "effect"
+import * as Deferred from "effect/Deferred"
+import * as Effect from "effect/Effect"
+import * as Encoding from "effect/Encoding"
+import * as Fiber from "effect/Fiber"
+import * as Option from "effect/Option"
+import * as Ref from "effect/Ref"
 import {
   HttpClient,
-  HttpClientRequest,
+  type HttpClientRequest,
   HttpClientResponse,
 } from "effect/unstable/http"
-import { KeyValueStore } from "effect/unstable/persistence"
+import * as KeyValueStore from "effect/unstable/persistence/KeyValueStore"
 import {
   CodexAuth,
   CodexAuthError,

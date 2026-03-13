@@ -1,8 +1,9 @@
 import { assert, describe, it } from "@effect/vitest"
-import { Effect, Ref } from "effect"
+import * as Effect from "effect/Effect"
+import * as Ref from "effect/Ref"
 import {
   HttpClient,
-  HttpClientRequest,
+  type HttpClientRequest,
   HttpClientResponse,
 } from "effect/unstable/http"
 import * as WebToMarkdown from "./WebToMarkdown.ts"

@@ -1,41 +1,36 @@
 /**
  * @since 1.0.0
  */
-import {
-  Array,
-  Effect,
-  identity,
-  Layer,
-  MutableRef,
-  Option,
-  pipe,
-  Queue,
-  Schema,
-  Scope,
-  Semaphore,
-  ServiceMap,
-  Stream,
-} from "effect"
-import {
-  AiError,
-  LanguageModel,
-  Prompt,
-  Tool,
-  Toolkit,
-} from "effect/unstable/ai"
-import { ModelName, ProviderName } from "effect/unstable/ai/Model"
-import { type StreamPart } from "effect/unstable/ai/Response"
+import * as Model from "effect/unstable/ai/Model"
+import type * as Response from "effect/unstable/ai/Response"
 import * as AgentExecutor from "./AgentExecutor.ts"
 import { stripWrappingCodeFence } from "./ScriptExtraction.ts"
-import type { Path } from "effect/Path"
-import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
-import type { HttpClient } from "effect/unstable/http/HttpClient"
+import type * as Path from "effect/Path"
+import type * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner"
+import type * as HttpClient from "effect/unstable/http/HttpClient"
 import type {
   CurrentDirectory,
   SubagentExecutor,
   TaskCompleter,
 } from "./AgentTools.ts"
-import type { FileSystem } from "effect/FileSystem"
+import type * as FileSystem from "effect/FileSystem"
+import * as Prompt from "effect/unstable/ai/Prompt"
+import * as Effect from "effect/Effect"
+import * as Stream from "effect/Stream"
+import type * as Scope from "effect/Scope"
+import * as LanguageModel from "effect/unstable/ai/LanguageModel"
+import type * as AiError from "effect/unstable/ai/AiError"
+import * as ServiceMap from "effect/ServiceMap"
+import * as Option from "effect/Option"
+import { identity, pipe } from "effect/Function"
+import * as MutableRef from "effect/MutableRef"
+import * as Queue from "effect/Queue"
+import * as Array from "effect/Array"
+import * as Schema from "effect/Schema"
+import * as Layer from "effect/Layer"
+import * as Tool from "effect/unstable/ai/Tool"
+import * as Toolkit from "effect/unstable/ai/Toolkit"
+import * as Semaphore from "effect/Semaphore"
 
 /**
  * @since 1.0.0
@@ -78,7 +73,10 @@ export interface Agent {
   }): Effect.Effect<
     Stream.Stream<Output, AgentFinished | AiError.AiError>,
     never,
-    Scope.Scope | LanguageModel.LanguageModel | ProviderName | ModelName
+    | Scope.Scope
+    | LanguageModel.LanguageModel
+    | Model.ProviderName
+    | Model.ModelName
   >
 
   /**
@@ -158,14 +156,14 @@ ${content}
   }) => Stream.Stream<
     Output,
     AgentFinished | AiError.AiError,
-    LanguageModel.LanguageModel | ProviderName | ModelName
+    LanguageModel.LanguageModel | Model.ProviderName | Model.ModelName
   > = Effect.fnUntraced(function* (opts) {
     const agentId = opts.agentId
     const ai = yield* LanguageModel.LanguageModel
     const subagentModel = yield* Effect.serviceOption(SubagentModel)
     const modelConfig = yield* AgentModelConfig
     const services = yield* Effect.services<
-      LanguageModel.LanguageModel | ProviderName | ModelName
+      LanguageModel.LanguageModel | Model.ProviderName | Model.ModelName
     >()
     let finalSummary = Option.none<string>()
 
@@ -233,8 +231,8 @@ ${content}
           system: opts.system,
           disableHistory: true,
         })
-        const provider = yield* ProviderName
-        const model = yield* ModelName
+        const provider = yield* Model.ProviderName
+        const model = yield* Model.ModelName
         maybeSend({
           agentId: opts.agentId,
           part: new SubagentStart({ id, prompt, model, provider }),
@@ -341,7 +339,7 @@ ${content}
         }
 
         // oxlint-disable-next-line typescript/no-explicit-any
-        let response = Array.empty<StreamPart<any>>()
+        let response = Array.empty<Response.StreamPart<any>>()
         let reasoningStarted = false
         let hadReasoningDelta = false
         yield* pipe(
@@ -498,8 +496,8 @@ ${content}
       new AgentStart({
         id: opts.agentId,
         prompt: opts.prompt,
-        provider: yield* ProviderName,
-        model: yield* ModelName,
+        provider: yield* Model.ProviderName,
+        model: yield* Model.ModelName,
       }),
     )
 
@@ -647,10 +645,10 @@ export const layerLocal = <Toolkit extends Toolkit.Any = never>(options: {
 }): Layer.Layer<
   Agent,
   never,
-  | FileSystem
-  | Path
-  | ChildProcessSpawner
-  | HttpClient
+  | FileSystem.FileSystem
+  | Path.Path
+  | ChildProcessSpawner.ChildProcessSpawner
+  | HttpClient.HttpClient
   | Exclude<
       Toolkit extends Toolkit.Toolkit<infer T>
         ? Tool.HandlersFor<T> | Tool.HandlerServices<T[keyof T]>
@@ -665,7 +663,9 @@ export const layerLocal = <Toolkit extends Toolkit.Any = never>(options: {
  */
 export class SubagentModel extends ServiceMap.Service<
   SubagentModel,
-  ServiceMap.ServiceMap<LanguageModel.LanguageModel | ProviderName | ModelName>
+  ServiceMap.ServiceMap<
+    LanguageModel.LanguageModel | Model.ProviderName | Model.ModelName
+  >
 >()("clanka/Agent/SubagentModel") {}
 
 /**
@@ -674,7 +674,7 @@ export class SubagentModel extends ServiceMap.Service<
  */
 export const layerSubagentModel = <E, R>(
   layer: Layer.Layer<
-    LanguageModel.LanguageModel | ProviderName | ModelName,
+    LanguageModel.LanguageModel | Model.ProviderName | Model.ModelName,
     E,
     R
   >,

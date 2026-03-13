@@ -2,13 +2,14 @@
  * @since 1.0.0
  */
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai-compat"
-import { Layer, Struct } from "effect"
+import * as Layer from "effect/Layer"
+import * as Struct from "effect/Struct"
 import { API_URL, GithubCopilotAuth } from "./CopilotAuth.ts"
 import { AgentModelConfig } from "./Agent.ts"
-import { Model } from "effect/unstable/ai"
-import type { HttpClient } from "effect/unstable/http/HttpClient"
-import type { KeyValueStore } from "effect/unstable/persistence/KeyValueStore"
-import type { LanguageModel } from "effect/unstable/ai/LanguageModel"
+import * as Model from "effect/unstable/ai/Model"
+import type * as HttpClient from "effect/unstable/http/HttpClient"
+import type * as KeyValueStore from "effect/unstable/persistence/KeyValueStore"
+import type * as LanguageModel from "effect/unstable/ai/LanguageModel"
 
 /**
  * @since 1.0.0
@@ -27,7 +28,11 @@ export const model = (
   options?:
     | (OpenAiLanguageModel.Config["Service"] & typeof AgentModelConfig.Service)
     | undefined,
-): Model.Model<"openai", LanguageModel, HttpClient | KeyValueStore> =>
+): Model.Model<
+  "openai",
+  LanguageModel.LanguageModel,
+  HttpClient.HttpClient | KeyValueStore.KeyValueStore
+> =>
   Model.make(
     "openai",
     model,

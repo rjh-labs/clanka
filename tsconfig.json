@@ -35,7 +35,8 @@
 
     "plugins": [
       {
-        "name": "@effect/language-service"
+        "name": "@effect/language-service",
+        "namespaceImportPackages": ["effect", "@effect/platform-node"]
       }
     ]
   },

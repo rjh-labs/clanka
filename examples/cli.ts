@@ -1,5 +1,5 @@
 import { Effect, Layer, pipe, Stream } from "effect"
-import { Agent, Codex, Copilot, OutputFormatter } from "../src/index.ts"
+import { Agent, Codex, Copilot, OutputFormatter } from "clanka"
 import {
   NodeHttpClient,
   NodeRuntime,

@@ -1,10 +1,14 @@
 /**
  * @since 1.0.0
  */
-import { Array, Layer, SchemaAST, ServiceMap } from "effect"
-import { Tool, Toolkit } from "effect/unstable/ai"
+import * as Array from "effect/Array"
+import * as Layer from "effect/Layer"
+import * as SchemaAST from "effect/SchemaAST"
+import * as ServiceMap from "effect/ServiceMap"
+import type * as Tool from "effect/unstable/ai/Tool"
+import type * as Toolkit from "effect/unstable/ai/Toolkit"
 import * as TypeBuilder from "./TypeBuilder.ts"
-import { memoize } from "effect/Function"
+import * as Function from "effect/Function"
 
 /**
  * @since 1.0.0
@@ -19,7 +23,7 @@ export class ToolkitRenderer extends ServiceMap.Service<
   }
 >()("clanka/ToolkitRenderer") {
   static readonly layer = Layer.succeed(ToolkitRenderer, {
-    render: memoize(
+    render: Function.memoize(
       <Tools extends Record<string, Tool.Any>>(
         tools: Toolkit.Toolkit<Tools>,
       ) => {
