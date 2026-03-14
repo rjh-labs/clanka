@@ -160,7 +160,7 @@ export const AgentTools = Toolkit.make(
     description: "Run a bash command and return the output",
     parameters: Schema.Struct({
       command: Schema.String,
-      timeout: Schema.optional(Schema.Finite).annotate({
+      timeoutMs: Schema.optional(Schema.Finite).annotate({
         documentation: "Timeout in ms (default: 120000)",
       }),
     }).annotate({
@@ -356,7 +356,7 @@ export const AgentToolHandlersNoDeps = AgentTools.toLayer(
         return yield* Effect.promise(() => Glob.glob(pattern, { cwd }))
       }),
       bash: Effect.fn("AgentTools.bash")(function* (options) {
-        const timeout = Duration.millis(options.timeout ?? 120_000)
+        const timeout = Duration.millis(options.timeoutMs ?? 120_000)
         yield* Effect.logInfo(`Calling "bash"`).pipe(
           Effect.annotateLogs({ ...options, timeout }),
         )
