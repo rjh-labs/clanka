@@ -307,7 +307,7 @@ ${content}
                 role: modelConfig.supportsAssistantPrefill
                   ? "assistant"
                   : "user",
-                content: result,
+                content: `Console output from executing javascript code:\n\n${result}`,
               },
             ]),
           )
@@ -559,9 +559,11 @@ const content = await readFile({
 console.log(JSON.parse(content))
 \`\`\`
 
-And then you wil revieve back output that would look like this:
+And then you will revieve back the console output:
 
 \`\`\`
+Console output from executing javascript code:
+
 [22:44:53.054] INFO (#47): Calling "readFile" { path: 'package.json' }
 {
   "name": "my-project",
@@ -589,10 +591,12 @@ const systemToolsCommon = (
 - Top level await is supported.
 - AVOID passing scripts into the "bash" function, and instead write javascript.
 - PREFER the "search" function over "rg" for finding information or code
+- Do as much work as possible in a single script, using \`Promise.all\` to run multiple functions in parallel.
 - Variables **are not shared** between executions, so you must include all necessary code in each script you execute.
 - Make use of the "delegate" tool to delegate exploration and small research tasks. You can delegate multiple tasks in parallel with Promise.all
 
 **When you have fully completed your task**, call the "taskComplete" function with the final output.
+DO NOT output the final result without wrapping it with "taskComplete".
 Make sure every detail of the task is done before calling "taskComplete".
 
 You have the following functions available to you:
