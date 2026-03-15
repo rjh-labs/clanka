@@ -19,7 +19,7 @@ import * as Effect from "effect/Effect"
 import * as Stream from "effect/Stream"
 import type * as Scope from "effect/Scope"
 import * as LanguageModel from "effect/unstable/ai/LanguageModel"
-import type * as AiError from "effect/unstable/ai/AiError"
+import * as AiError from "effect/unstable/ai/AiError"
 import * as ServiceMap from "effect/ServiceMap"
 import * as Option from "effect/Option"
 import { identity, pipe } from "effect/Function"
@@ -31,6 +31,7 @@ import * as Layer from "effect/Layer"
 import * as Tool from "effect/unstable/ai/Tool"
 import * as Toolkit from "effect/unstable/ai/Toolkit"
 import * as Semaphore from "effect/Semaphore"
+import * as Schedule from "effect/Schedule"
 
 /**
  * @since 1.0.0
@@ -167,7 +168,6 @@ ${content}
     >()
     let finalSummary = Option.none<string>()
 
-    const singleToolMode = modelConfig.supportsNoTools !== true
     const output = yield* Queue.make<Output, AgentFinished | AiError.AiError>()
     const prompt = opts.disableHistory ? MutableRef.make(Prompt.empty) : history
 
@@ -176,7 +176,7 @@ ${content}
     const generateSystem =
       typeof opts.system === "function" ? opts.system : defaultSystem
 
-    const toolInstructions = generateSystemTools(toolsDts, !singleToolMode)
+    const toolInstructions = generateSystemTools(toolsDts)
     let system = generateSystem({
       toolInstructions,
       agentsMd: Option.getOrElse(agentsMd, () => ""),
@@ -295,25 +295,8 @@ ${content}
       MutableRef.update(prompt, Prompt.setSystem(system))
     }
 
-    let currentScript = ""
     yield* Effect.gen(function* () {
       while (true) {
-        if (!singleToolMode && currentScript.length > 0) {
-          const result = yield* executeScript(currentScript)
-          MutableRef.update(
-            prompt,
-            Prompt.concat([
-              {
-                role: modelConfig.supportsAssistantPrefill
-                  ? "assistant"
-                  : "user",
-                content: `Console output from executing javascript code:\n\n${result}`,
-              },
-            ]),
-          )
-          currentScript = ""
-        }
-
         if (Option.isSome(finalSummary)) {
           yield* Queue.fail(
             output,
@@ -343,19 +326,8 @@ ${content}
         let reasoningStarted = false
         let hadReasoningDelta = false
         yield* pipe(
-          ai.streamText(
-            singleToolMode
-              ? { prompt: prompt.current, toolkit: singleTool }
-              : { prompt: prompt.current },
-          ),
+          ai.streamText({ prompt: prompt.current, toolkit: singleTool }),
           Stream.takeUntil((part) => {
-            if (
-              !singleToolMode &&
-              part.type === "text-end" &&
-              currentScript.trim().length > 0
-            ) {
-              return true
-            }
             if (
               (part.type === "text-end" || part.type === "reasoning-end") &&
               pendingMessages.size > 0
@@ -370,68 +342,10 @@ ${content}
             for (const part of parts) {
               switch (part.type) {
                 case "text-start":
-                  if (singleToolMode) {
-                    if (hadReasoningDelta) {
-                      hadReasoningDelta = false
-                      maybeSend({
-                        agentId,
-                        part: new ReasoningEnd(),
-                        release: true,
-                      })
-                    }
-                    reasoningStarted = true
-                    break
-                  }
-                  currentScript = ""
-                  break
-                case "text-delta": {
-                  if (singleToolMode) {
-                    hadReasoningDelta = true
-                    if (reasoningStarted) {
-                      reasoningStarted = false
-                      maybeSend({
-                        agentId,
-                        part: new ReasoningStart(),
-                        acquire: true,
-                      })
-                    }
-                    maybeSend({
-                      agentId,
-                      part: new ReasoningDelta({ delta: part.delta }),
-                    })
-                    break
-                  }
-                  if (currentScript === "" && part.delta.length > 0) {
-                    maybeSend({
-                      agentId,
-                      part: new ScriptStart(),
-                      acquire: true,
-                    })
-                  }
-                  maybeSend({
-                    agentId,
-                    part: new ScriptDelta({ delta: part.delta }),
-                  })
-                  currentScript += part.delta
-                  break
-                }
-                case "text-end": {
-                  if (singleToolMode) {
-                    reasoningStarted = false
-                    if (hadReasoningDelta) {
-                      hadReasoningDelta = false
-                      maybeSend({
-                        agentId,
-                        part: new ReasoningEnd(),
-                        release: true,
-                      })
-                    }
-                  }
-                  break
-                }
                 case "reasoning-start":
                   reasoningStarted = true
                   break
+                case "text-delta":
                 case "reasoning-delta":
                   hadReasoningDelta = true
                   if (reasoningStarted) {
@@ -447,6 +361,7 @@ ${content}
                     part: new ReasoningDelta({ delta: part.delta }),
                   })
                   break
+                case "text-end":
                 case "reasoning-end":
                   reasoningStarted = false
                   if (hadReasoningDelta) {
@@ -468,8 +383,12 @@ ${content}
           Effect.retry({
             while: (err) => {
               response = []
+              if (err.isRetryable) {
+                maybeSend({ agentId, part: new ErrorRetry({ error: err }) })
+              }
               return err.isRetryable
             },
+            schedule: retryPolicy,
           }),
           modelConfig.systemPromptTransform
             ? (effect) => modelConfig.systemPromptTransform!(system, effect)
@@ -479,7 +398,6 @@ ${content}
           prompt,
           Prompt.concat(Prompt.fromResponseParts(response)),
         )
-        currentScript = currentScript.trim()
       }
     }).pipe(
       Effect.provideService(ScriptExecutor, (script) => {
@@ -526,6 +444,11 @@ ${content}
   })
 })
 
+const retryPolicy = Schedule.exponential(100, 1.5).pipe(
+  Schedule.either(Schedule.spaced(5000)),
+  Schedule.jittered,
+)
+
 const defaultSystem = (options: {
   readonly toolInstructions: string
   readonly agentsMd: string | null
@@ -540,12 +463,28 @@ ${options.toolInstructions}
 ${options.agentsMd}
 `
 
-const generateSystemTools = (toolsDts: string, multi: boolean) => {
-  const toolMd = multi
-    ? generateSystemMulti(toolsDts)
-    : generateSystemSingle(toolsDts)
+const generateSystemTools = (
+  toolsDts: string,
+) => `**YOU ONLY HAVE ACCESS TO ONE TOOL** "execute", to run javascript code to do your work.
 
-  return `${toolMd}
+- Use \`console.log\` to print any output you need.
+- Top level await is supported.
+- AVOID passing scripts into the "bash" function, and instead write javascript.
+- Do as much work as possible in a single script, using \`Promise.all\` to run multiple functions in parallel.
+- Variables **are not shared** between executions, so you must include all necessary code in each script you execute.
+
+**When you have fully completed your task**, call the "taskComplete" function with the final output.
+DO NOT output the final result without wrapping it with "taskComplete".
+Make sure every detail of the task is done before calling "taskComplete".
+
+You have the following functions available to you:
+
+\`\`\`ts
+${toolsDts}
+
+/** The global Fetch API available for making HTTP requests. */
+declare const fetch: typeof globalThis.fetch
+\`\`\`
 
 For example, here is how you would read a file. First you would respond with
 javascript code that uses the "readFile" function:
@@ -569,43 +508,6 @@ Console output from executing javascript code:
   "name": "my-project",
   "version": "1.0.0"
 }
-\`\`\``
-}
-
-const generateSystemMulti = (toolsDts: string) => {
-  return `You complete your tasks by **only writing javascript code** to interact with your environment.
-
-${systemToolsCommon(toolsDts)}`
-}
-
-// oxlint-disable-next-line typescript/no-explicit-any
-const generateSystemSingle = (toolsDts: string) => {
-  return `**YOU ONLY HAVE ACCESS TO ONE TOOL** "execute", to run javascript code to do your work.
-
-${systemToolsCommon(toolsDts)}`
-}
-
-const systemToolsCommon = (
-  toolsDts: string,
-) => `- Use \`console.log\` to print any output you need.
-- Top level await is supported.
-- AVOID passing scripts into the "bash" function, and instead write javascript.
-- PREFER the "search" function over "rg" for finding information or code
-- Do as much work as possible in a single script, using \`Promise.all\` to run multiple functions in parallel.
-- Variables **are not shared** between executions, so you must include all necessary code in each script you execute.
-- Make use of the "delegate" tool to delegate exploration and small research tasks. You can delegate multiple tasks in parallel with Promise.all
-
-**When you have fully completed your task**, call the "taskComplete" function with the final output.
-DO NOT output the final result without wrapping it with "taskComplete".
-Make sure every detail of the task is done before calling "taskComplete".
-
-You have the following functions available to you:
-
-\`\`\`ts
-${toolsDts}
-
-/** The global Fetch API available for making HTTP requests. */
-declare const fetch: typeof globalThis.fetch
 \`\`\``
 
 class ScriptExecutor extends ServiceMap.Service<
@@ -690,12 +592,12 @@ export const layerSubagentModel = <E, R>(
  * @category System prompts
  */
 export class AgentModelConfig extends ServiceMap.Reference<{
-  readonly systemPromptTransform?: <A, E, R>(
-    system: string,
-    effect: Effect.Effect<A, E, R>,
-  ) => Effect.Effect<A, E, R>
-  readonly supportsAssistantPrefill?: boolean | undefined
-  readonly supportsNoTools?: boolean | undefined
+  readonly systemPromptTransform?:
+    | (<A, E, R>(
+        system: string,
+        effect: Effect.Effect<A, E, R>,
+      ) => Effect.Effect<A, E, R>)
+    | undefined
 }>("clanka/Agent/SystemPromptTransform", {
   defaultValue: () => ({}),
 }) {
@@ -780,6 +682,14 @@ export class ScriptEnd extends Schema.TaggedClass<ScriptEnd>()(
  * @since 1.0.0
  * @category Output
  */
+export class ErrorRetry extends Schema.TaggedClass<ErrorRetry>()("ErrorRetry", {
+  error: AiError.AiError,
+}) {}
+
+/**
+ * @since 1.0.0
+ * @category Output
+ */
 export class ScriptOutput extends Schema.TaggedClass<ScriptOutput>()(
   "ScriptOutput",
   {
@@ -825,6 +735,7 @@ export type ContentPart =
   | ScriptDelta
   | ScriptEnd
   | ScriptOutput
+  | ErrorRetry
 
 export const ContentPart = Schema.Union([
   ReasoningStart,
@@ -834,6 +745,7 @@ export const ContentPart = Schema.Union([
   ScriptDelta,
   ScriptEnd,
   ScriptOutput,
+  ErrorRetry,
 ])
 
 /**
@@ -875,6 +787,7 @@ export const Output = Schema.Union([
   SubagentStart,
   SubagentComplete,
   SubagentPart,
+  ErrorRetry,
 ])
 
 /**

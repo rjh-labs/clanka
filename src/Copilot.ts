@@ -45,8 +45,7 @@ export const model = (
         ]),
       }),
       AgentModelConfig.layer({
-        supportsAssistantPrefill: options?.supportsAssistantPrefill ?? false,
-        supportsNoTools: options?.supportsNoTools ?? false,
+        systemPromptTransform: options?.systemPromptTransform,
       }),
     ).pipe(Layer.provide(layerClient)),
   )

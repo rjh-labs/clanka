@@ -10,6 +10,7 @@ import * as Stream from "effect/Stream"
 import type { AgentFinished, Output } from "./Agent.ts"
 import chalk from "chalk"
 import type * as Prompt from "effect/unstable/ai/Prompt"
+import * as Cause from "effect/Cause"
 
 /**
  * @since 1.0.0
@@ -72,6 +73,9 @@ ${output.summary}\n\n`
               ? lines.slice(0, 20).join("\n") + "\n... (truncated)"
               : output.output
           return `${prefix}${chalkScriptHeading(`${scriptIcon} Script output`)}\n\n${chalk.dim(truncated)}\n\n`
+        }
+        case "ErrorRetry": {
+          return `${prefix}${chalk.red(`Error: ${output.error}. Retrying...`)}\n\n${chalk.dim(Cause.pretty(Cause.fail(output.error)))}\n\n`
         }
       }
     }),

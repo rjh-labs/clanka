@@ -40,11 +40,7 @@ export const model = (
       OpenAiLanguageModel.layer({
         model,
         config: {
-          ...Struct.omit(options ?? {}, [
-            "reasoning",
-            "supportsNoTools",
-            "supportsAssistantPrefill",
-          ]),
+          ...Struct.omit(options ?? {}, ["reasoning"]),
           store: false,
           reasoning: {
             effort: options?.reasoning?.effort ?? "medium",
@@ -57,8 +53,6 @@ export const model = (
           OpenAiLanguageModel.withConfigOverride(effect, {
             instructions: system,
           }),
-        supportsAssistantPrefill: options?.supportsAssistantPrefill ?? true,
-        supportsNoTools: options?.supportsNoTools ?? true,
       }),
     ).pipe(Layer.provide(layerClient)),
   )
