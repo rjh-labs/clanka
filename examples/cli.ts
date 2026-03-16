@@ -1,4 +1,4 @@
-import { Effect, Layer, pipe, Stream } from "effect"
+import { Effect, Layer, Stream } from "effect"
 import { Agent, Codex, Copilot, OutputFormatter } from "clanka"
 import {
   NodeHttpClient,
@@ -50,12 +50,9 @@ const AgentLayer = Agent.layerLocal({
 Effect.gen(function* () {
   const agent = yield* Agent.Agent
 
-  const output = yield* pipe(
-    agent.send({
-      prompt: process.argv.slice(2).join(" "),
-    }),
-    Effect.provide([Gpt54, Agent.layerSubagentModel(SubAgentModel)]),
-  )
+  const output = yield* agent.send({
+    prompt: process.argv.slice(2).join(" "),
+  })
   yield* output.pipe(
     OutputFormatter.pretty,
     Stream.runForEachArray((chunk) => {
@@ -65,4 +62,8 @@ Effect.gen(function* () {
       return Effect.void
     }),
   )
-}).pipe(Effect.scoped, Effect.provide(AgentLayer), NodeRuntime.runMain)
+}).pipe(
+  Effect.scoped,
+  Effect.provide([AgentLayer, Gpt54, Agent.layerSubagentModel(SubAgentModel)]),
+  NodeRuntime.runMain,
+)
