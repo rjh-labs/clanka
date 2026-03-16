@@ -170,6 +170,7 @@ ${content}
     let finalSummary = Option.none<string>()
 
     const output = yield* Queue.make<Output, AgentFinished | AiError.AiError>()
+    let outputTokens = 0
     const prompt = opts.disableHistory ? MutableRef.make(Prompt.empty) : history
 
     MutableRef.update(prompt, Prompt.concat(opts.prompt))
@@ -374,7 +375,19 @@ ${content}
                   }
                   break
                 case "finish":
-                  // console.log("Tokens used:", part.usage, "\n")
+                  const usage = part.usage
+                  if (usage.outputTokens.total !== undefined) {
+                    outputTokens += usage.outputTokens.total
+                  }
+                  if (usage.inputTokens.total !== undefined) {
+                    maybeSend({
+                      agentId,
+                      part: new Usage({
+                        inputTokens: usage.inputTokens.total,
+                        outputTokens,
+                      }),
+                    })
+                  }
                   break
               }
             }
@@ -689,6 +702,15 @@ export class ScriptEnd extends Schema.TaggedClass<ScriptEnd>()(
  * @since 1.0.0
  * @category Output
  */
+export class Usage extends Schema.TaggedClass<Usage>()("Usage", {
+  inputTokens: Schema.Number,
+  outputTokens: Schema.Number,
+}) {}
+
+/**
+ * @since 1.0.0
+ * @category Output
+ */
 export class ErrorRetry extends Schema.TaggedClass<ErrorRetry>()("ErrorRetry", {
   error: AiError.AiError,
 }) {}
@@ -742,6 +764,7 @@ export type ContentPart =
   | ScriptDelta
   | ScriptEnd
   | ScriptOutput
+  | Usage
   | ErrorRetry
 
 export const ContentPart = Schema.Union([
@@ -752,6 +775,7 @@ export const ContentPart = Schema.Union([
   ScriptDelta,
   ScriptEnd,
   ScriptOutput,
+  Usage,
   ErrorRetry,
 ])
 
@@ -783,18 +807,11 @@ export type Output =
  * @category Output
  */
 export const Output = Schema.Union([
+  ...ContentPart.members,
   AgentStart,
-  ReasoningStart,
-  ReasoningDelta,
-  ReasoningEnd,
-  ScriptStart,
-  ScriptDelta,
-  ScriptEnd,
-  ScriptOutput,
   SubagentStart,
   SubagentComplete,
   SubagentPart,
-  ErrorRetry,
 ])
 
 /**

@@ -77,6 +77,9 @@ ${output.summary}\n\n`
         case "ErrorRetry": {
           return `${prefix}${chalk.red(`Error: ${output.error.reason._tag}. Retrying...`)}\n\n${chalk.dim(Cause.pretty(Cause.fail(output.error)))}\n\n`
         }
+        case "Usage": {
+          return `${prefix}${chalkInfoHeading(`${infoIcon} Usage:`)} ${numberFormat.format(output.inputTokens)} input / ${numberFormat.format(output.outputTokens)} output\n\n`
+        }
       }
     }),
     Stream.catchTag("AgentFinished", (finished) =>
@@ -99,15 +102,19 @@ const promptToString = (prompt: Prompt.Prompt): string => {
   return textParts.join("\n")
 }
 
+const numberFormat = new Intl.NumberFormat()
+
 const chalkAgentHeading = chalk.bold.green
 const chalkScriptHeading = chalk.bold.blue
 const chalkSubagentHeading = chalk.bold.magenta
 const chalkReasoningHeading = chalk.bold.yellow
+const chalkInfoHeading = chalk.bold.cyan
 
 const scriptIcon = "\u{f0bc1}"
 const subagentIcon = "\u{ee0d} "
 const thinkingIcon = "\u{f07f6}"
 const doneIcon = "\u{eab2}"
+const infoIcon = "\u{f05a}"
 
 /**
  * @since 1.0.0
