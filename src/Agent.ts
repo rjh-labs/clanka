@@ -483,6 +483,7 @@ const generateSystemTools = (
 - Use \`console.log\` to print any output you need.
 - Top level await is supported.
 - AVOID passing scripts into the "bash" function, and instead write javascript.
+- When using "rg" over a large codebase, prefer using the "filesOnly" option before looking at file contents
 - Do as much work as possible in a single script, using \`Promise.all\` to run multiple functions in parallel.
 - Variables **are not shared** between executions, so you must include all necessary code in each script you execute.
 - Use the "delegate" function to assign complex jobs to another software engineer.

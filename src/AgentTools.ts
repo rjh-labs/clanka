@@ -81,6 +81,9 @@ export const AgentTools = Toolkit.make(
       glob: Schema.optional(Schema.String).annotate({
         documentation: "--glob",
       }),
+      filesOnly: Schema.optional(Schema.Boolean).annotate({
+        documentation: "Only return file paths. --files-with-matches",
+      }),
       maxLines: Schema.optional(Schema.Finite).annotate({
         documentation:
           "The total maximum number of lines to return across all files (default: 500)",
@@ -313,6 +316,9 @@ export const AgentToolHandlersNoDeps = AgentTools.toLayer(
         yield* Effect.logInfo(`Calling "rg"`).pipe(Effect.annotateLogs(options))
         const cwd = yield* CurrentDirectory
         const args = ["--max-filesize", "1M", "--line-number"]
+        if (options.filesOnly) {
+          args.push("--files-with-matches")
+        }
         if (options.glob) {
           args.push("--glob", options.glob)
           if (!options.glob.startsWith("*")) {
