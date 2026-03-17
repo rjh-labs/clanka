@@ -315,7 +315,7 @@ export const AgentToolHandlersNoDeps = AgentTools.toLayer(
       rg: Effect.fn("AgentTools.rg")(function* (options) {
         yield* Effect.logInfo(`Calling "rg"`).pipe(Effect.annotateLogs(options))
         const cwd = yield* CurrentDirectory
-        const args = ["--max-filesize", "1M", "--line-number"]
+        const args = ["--max-filesize", "1M", "--heading", "--line-number"]
         if (options.filesOnly) {
           args.push("--files-with-matches")
         }
