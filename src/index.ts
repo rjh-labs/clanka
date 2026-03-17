@@ -21,12 +21,22 @@ export * as Codex from "./Codex.ts"
 /**
  * @since 1.0.0
  */
+export * as CodeChunker from "./CodeChunker.ts"
+
+/**
+ * @since 1.0.0
+ */
 export * as Copilot from "./Copilot.ts"
 
 /**
  * @since 1.0.0
  */
 export * as OutputFormatter from "./OutputFormatter.ts"
+
+/**
+ * @since 1.0.0
+ */
+export * as SemanticSearch from "./SemanticSearch.ts"
 
 /**
  * @since 1.0.0
