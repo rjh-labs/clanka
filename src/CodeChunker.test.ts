@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest"
+import { assert, describe, expect, it } from "@effect/vitest"
 import {
   chunkFileContent,
   isMeaningfulFile,
   isProbablyMinified,
 } from "./CodeChunker.ts"
+import { readFileSync } from "node:fs"
 
 describe("isMeaningfulFile", () => {
   it("keeps source and documentation files", () => {
@@ -41,7 +42,234 @@ describe("isProbablyMinified", () => {
 })
 
 describe("chunkFileContent", () => {
-  it("emits chunks with metadata and deterministic hashes", () => {
+  it("splits TypeScript into AST chunks with metadata", () => {
+    const content = [
+      "// alpha docs",
+      "export const alpha = 1",
+      "// beta docs",
+      "function beta() {",
+      "  return alpha",
+      "}",
+      "class Example {",
+      "  // gamma docs",
+      "  gamma() {",
+      "    return beta()",
+      "  }",
+      "}",
+    ].join("\n")
+
+    const chunks = chunkFileContent("src\\example.ts", content, {
+      chunkSize: 10,
+      chunkOverlap: 2,
+    })
+
+    expect(chunks).toHaveLength(4)
+    expect(chunks[0]).toMatchObject({
+      path: "src/example.ts",
+      startLine: 1,
+      endLine: 2,
+      name: "alpha",
+      type: "variable",
+      parent: undefined,
+      content: ["// alpha docs", "export const alpha = 1"].join("\n"),
+    })
+    expect(chunks[1]).toMatchObject({
+      startLine: 3,
+      endLine: 6,
+      name: "beta",
+      type: "function",
+      parent: undefined,
+      content: [
+        "// beta docs",
+        "function beta() {",
+        "  return alpha",
+        "}",
+      ].join("\n"),
+    })
+    expect(chunks[2]).toMatchObject({
+      startLine: 7,
+      endLine: 12,
+      name: "Example",
+      type: "class",
+      parent: undefined,
+      content: [
+        "class Example {",
+        "  // gamma docs",
+        "  gamma() {",
+        "    return beta()",
+        "  }",
+        "}",
+      ].join("\n"),
+    })
+    expect(chunks[3]).toMatchObject({
+      startLine: 8,
+      endLine: 11,
+      name: "gamma",
+      type: "method",
+      parent: "class Example",
+      content: [
+        "  // gamma docs",
+        "  gamma() {",
+        "    return beta()",
+        "  }",
+      ].join("\n"),
+    })
+
+    expect(
+      chunkFileContent("src/example.ts", content, {
+        chunkSize: 10,
+        chunkOverlap: 2,
+      })[0],
+    ).toEqual(chunks[0])
+  })
+
+  it("splits large AST ranges using chunk settings", () => {
+    const content = [
+      "export function large() {",
+      ...Array.from(
+        { length: 60 },
+        (_, index) =>
+          "  const line" + String(index + 1) + " = " + String(index + 1),
+      ),
+      "}",
+    ].join("\n")
+
+    const chunks = chunkFileContent("src/large.ts", content, {
+      chunkSize: 20,
+      chunkOverlap: 5,
+    })
+
+    expect(chunks).toHaveLength(4)
+    expect(chunks[0]).toMatchObject({
+      startLine: 1,
+      endLine: 20,
+      name: "large",
+      type: "function",
+      parent: undefined,
+    })
+    expect(chunks[1]).toMatchObject({
+      startLine: 16,
+      endLine: 35,
+    })
+    expect(chunks[2]).toMatchObject({
+      startLine: 31,
+      endLine: 50,
+    })
+    expect(chunks[3]).toMatchObject({
+      startLine: 46,
+      endLine: 62,
+    })
+  })
+
+  it("keeps only the first oversized class segment when methods are present", () => {
+    const content = [
+      "class Example {",
+      "  first() {",
+      "    const a = 1",
+      "    const b = 2",
+      "    return a + b",
+      "  }",
+      "",
+      "  second() {",
+      "    const c = 3",
+      "    const d = 4",
+      "    return c + d",
+      "  }",
+      "}",
+    ].join("\n")
+
+    const chunks = chunkFileContent("src/example.ts", content, {
+      chunkSize: 6,
+      chunkOverlap: 1,
+    })
+
+    const classChunks = chunks.filter((chunk) => chunk.type === "class")
+    expect(classChunks).toHaveLength(1)
+    expect(classChunks[0]).toMatchObject({
+      startLine: 1,
+      endLine: 6,
+      name: "Example",
+      type: "class",
+      parent: undefined,
+    })
+
+    expect(chunks.filter((chunk) => chunk.type === "method")).toMatchObject([
+      {
+        startLine: 2,
+        endLine: 6,
+        name: "first",
+        parent: "class Example",
+      },
+      {
+        startLine: 8,
+        endLine: 12,
+        name: "second",
+        parent: "class Example",
+      },
+    ])
+  })
+
+  it("includes preceding comments in AST chunks", () => {
+    const content = [
+      "// alpha docs",
+      "export const alpha = 1",
+      "/**",
+      " * beta docs",
+      " */",
+      "function beta() {",
+      "  return alpha",
+      "}",
+      "class Example {",
+      "  // gamma docs",
+      "  gamma() {",
+      "    return beta()",
+      "  }",
+      "}",
+    ].join("\n")
+
+    const chunks = chunkFileContent("src/example.ts", content, {
+      chunkSize: 20,
+      chunkOverlap: 2,
+    })
+
+    expect(chunks).toHaveLength(4)
+    expect(chunks[0]).toMatchObject({
+      startLine: 1,
+      endLine: 2,
+      name: "alpha",
+      type: "variable",
+      content: ["// alpha docs", "export const alpha = 1"].join("\n"),
+    })
+    expect(chunks[1]).toMatchObject({
+      startLine: 3,
+      endLine: 8,
+      name: "beta",
+      type: "function",
+      content: [
+        "/**",
+        " * beta docs",
+        " */",
+        "function beta() {",
+        "  return alpha",
+        "}",
+      ].join("\n"),
+    })
+    expect(chunks[3]).toMatchObject({
+      startLine: 10,
+      endLine: 13,
+      name: "gamma",
+      type: "method",
+      parent: "class Example",
+      content: [
+        "  // gamma docs",
+        "  gamma() {",
+        "    return beta()",
+        "  }",
+      ].join("\n"),
+    })
+  })
+
+  it("falls back to line windows for unsupported languages", () => {
     const content = [
       "line 1",
       "line 2",
@@ -51,57 +279,36 @@ describe("chunkFileContent", () => {
       "line 6",
     ].join("\n")
 
-    const chunks = chunkFileContent("src\\example.ts", content, {
+    const chunks = chunkFileContent("docs\\notes.txt", content, {
       chunkSize: 3,
       chunkOverlap: 1,
     })
 
     expect(chunks).toHaveLength(3)
     expect(chunks[0]).toMatchObject({
-      path: "src/example.ts",
+      path: "docs/notes.txt",
       startLine: 1,
       endLine: 3,
+      name: undefined,
+      type: undefined,
+      parent: undefined,
       content: ["line 1", "line 2", "line 3"].join("\n"),
     })
     expect(chunks[1]).toMatchObject({
       startLine: 3,
       endLine: 5,
+      name: undefined,
+      type: undefined,
+      parent: undefined,
       content: ["line 3", "line 4", "line 5"].join("\n"),
     })
     expect(chunks[2]).toMatchObject({
       startLine: 5,
       endLine: 6,
+      name: undefined,
+      type: undefined,
+      parent: undefined,
       content: ["line 5", "line 6"].join("\n"),
-    })
-
-    expect(chunks[0]?.contentHash).toMatch(/^[a-f0-9]{64}$/)
-    expect(chunks[0]?.contentHash).toBe(
-      chunkFileContent("src/example.ts", content, {
-        chunkSize: 3,
-        chunkOverlap: 1,
-      })[0]?.contentHash,
-    )
-  })
-
-  it("skips non-meaningful chunk starts", () => {
-    const content = [
-      "",
-      "   ",
-      "---",
-      "const alpha = 1",
-      "const beta = 2",
-    ].join("\n")
-
-    const chunks = chunkFileContent("src/example.ts", content, {
-      chunkSize: 3,
-      chunkOverlap: 1,
-    })
-
-    expect(chunks).toHaveLength(1)
-    expect(chunks[0]).toMatchObject({
-      startLine: 4,
-      endLine: 5,
-      content: ["const alpha = 1", "const beta = 2"].join("\n"),
     })
   })
 
@@ -111,5 +318,19 @@ describe("chunkFileContent", () => {
       chunkOverlap: 0,
     })
     expect(chunks).toEqual([])
+  })
+
+  it("seperates class methods into their own chunks", () => {
+    const fixture = readFileSync(
+      "/Volumes/Code/effect/effect-smol/packages/effect/src/internal/effect.ts",
+      "utf-8",
+    )
+    const chunks = chunkFileContent("src/fiber.ts", fixture, {
+      chunkSize: 30,
+      chunkOverlap: 0,
+    })
+    const runLoopChunk = chunks.find((chunk) => chunk.name === "runLoop")
+    assert(runLoopChunk, "Expected to find a chunk for the runLoop method")
+    assert.strictEqual(runLoopChunk.type, "method")
   })
 })

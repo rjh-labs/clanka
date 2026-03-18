@@ -1,6 +1,7 @@
 /**
  * @since 1.0.0
  */
+import { createHash } from "node:crypto"
 import * as Effect from "effect/Effect"
 import * as ChunkRepo from "./ChunkRepo.ts"
 import * as CodeChunker from "./CodeChunker.ts"
@@ -23,13 +24,6 @@ import type * as ChildProcessSpawner from "effect/unstable/process/ChildProcessS
 import type * as FileSystem from "effect/FileSystem"
 import * as Console from "effect/Console"
 
-const normalizePath = (path: string) => path.replace(/\\/g, "/")
-
-const chunkConfig = {
-  chunkSize: 20,
-  chunkOverlap: 5,
-} as const
-
 /**
  * @since 1.0.0
  * @category Services
@@ -46,6 +40,13 @@ export class SemanticSearch extends ServiceMap.Service<
   }
 >()("clanka/SemanticSearch/SemanticSearch") {}
 
+const normalizePath = (path: string) => path.replace(/\\/g, "/")
+
+const chunkConfig = {
+  chunkSize: 30,
+  chunkOverlap: 0,
+} as const
+
 export const makeEmbeddingResolver = (
   resolver: EmbeddingModel.Service["resolver"],
   options: {
@@ -59,6 +60,35 @@ export const makeEmbeddingResolver = (
     ),
     RequestResolver.batchN(options.embeddingBatchSize ?? 500),
   )
+
+export const chunkEmbeddingInput = (chunk: CodeChunker.CodeChunk): string => {
+  const headerLines = ["---", "file: " + chunk.path]
+
+  if (chunk.name !== undefined) {
+    headerLines.push("name: " + chunk.name)
+  }
+  if (chunk.type !== undefined) {
+    headerLines.push("type: " + chunk.type)
+  }
+  if (chunk.parent !== undefined) {
+    headerLines.push("parent: " + chunk.parent)
+  }
+  headerLines.push("---")
+
+  const contentLines = chunk.content.split("\n")
+  let contentWithLines = ""
+  for (let i = 0; i < contentLines.length; i++) {
+    if (i > 0) {
+      contentWithLines += "\n"
+    }
+    contentWithLines += `${chunk.startLine + i}: ${contentLines[i]}`
+  }
+
+  return headerLines.join("\n") + "\n\n" + contentWithLines
+}
+
+const hashChunkInput = (input: string): string =>
+  createHash("sha256").update(input).digest("hex")
 
 /**
  * @since 1.0.0
@@ -115,11 +145,14 @@ export const layer = (options: {
           readonly syncId: ChunkRepo.SyncId
           readonly checkExisting: boolean
         }) {
+          const input = chunkEmbeddingInput(options.chunk)
+          const hash = hashChunkInput(input)
+
           if (options.checkExisting) {
             const id = yield* repo.exists({
               path: options.chunk.path,
               startLine: options.chunk.startLine,
-              hash: options.chunk.contentHash,
+              hash,
             })
             if (Option.isSome(id)) {
               yield* repo.setSyncId(id.value, options.syncId)
@@ -128,12 +161,7 @@ export const layer = (options: {
           }
 
           const result = yield* Effect.request(
-            new EmbeddingModel.EmbeddingRequest({
-              input: `File: ${options.chunk.path}
-Lines: ${options.chunk.startLine}-${options.chunk.endLine}
-
-${options.chunk.content}`,
-            }),
+            new EmbeddingModel.EmbeddingRequest({ input }),
             resolver,
           )
           const vector = new Float32Array(result.vector)
@@ -142,8 +170,8 @@ ${options.chunk.content}`,
               path: options.chunk.path,
               startLine: options.chunk.startLine,
               endLine: options.chunk.endLine,
-              hash: options.chunk.contentHash,
-              content: options.chunk.content,
+              hash,
+              content: input,
               vector,
               syncId: options.syncId,
             }),
@@ -209,7 +237,7 @@ ${options.chunk.content}`,
             vector: new Float32Array(vector),
             limit: options.limit,
           })
-          return results.map((r) => r.format()).join("\n\n")
+          return results.map((r) => r.content).join("\n\n")
         }, Effect.orDie),
         updateFile: Effect.fn("SemanticSearch.updateFile")(function* (path) {
           yield* Fiber.join(initialIndex)
