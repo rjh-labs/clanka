@@ -110,6 +110,15 @@ export const AgentTools = Toolkit.make(
     success: Schema.Array(Schema.String),
     dependencies: [CurrentDirectory],
   }),
+  Tool.make("gh", {
+    description:
+      "Use the GitHub CLI to run a command - use this instead of the bash tool.",
+    parameters: Schema.Array(Schema.String).annotate({
+      identifier: "args",
+    }),
+    success: Schema.String,
+    dependencies: [CurrentDirectory],
+  }),
   Tool.make("bash", {
     description: "Run a bash command and return the output",
     parameters: Schema.Struct({
@@ -170,14 +179,6 @@ export const AgentTools = Toolkit.make(
       identifier: "directory",
     }),
     success: Schema.Array(Schema.String),
-    dependencies: [CurrentDirectory],
-  }),
-  Tool.make("gh", {
-    description: "Use the GitHub CLI to run a command and return the output",
-    parameters: Schema.Array(Schema.String).annotate({
-      identifier: "args",
-    }),
-    success: Schema.String,
     dependencies: [CurrentDirectory],
   }),
   Tool.make("webSearch", {
