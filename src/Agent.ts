@@ -489,7 +489,6 @@ const generateSystemTools = (
 - Do as much work as possible in a single script, using \`Promise.all\` to run multiple functions in parallel.
 - AVOID passing scripts into the "bash" function, and instead write javascript.
 - **Variables are not shared** between executions, so you must include all necessary code in each script you execute.
-- Use the "delegate" function to assign jobs to another software engineer.
 - DO NOT use \`require\`, \`import\`, \`process\`, or any other node apis.
 
 When you have fully completed your task, call the "taskComplete" function with the final output.
