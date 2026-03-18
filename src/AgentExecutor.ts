@@ -112,6 +112,10 @@ export const makeLocal = Effect.fnUntraced(function* <
     }
   })
 
+  if (typeof process !== "undefined") {
+    process.on("uncaughtException", () => {})
+  }
+
   const execute = Effect.fnUntraced(function* (opts: {
     readonly script: string
     readonly onTaskComplete: (summary: string) => Effect.Effect<void>
