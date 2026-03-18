@@ -166,6 +166,7 @@ ${content}
     let finalSummary = Option.none<string>()
 
     const output = yield* Queue.make<Output, AgentFinished | AiError.AiError>()
+    let inputTokens = 0
     let outputTokens = 0
     const prompt = opts.disableHistory ? MutableRef.make(Prompt.empty) : history
 
@@ -376,10 +377,12 @@ ${content}
                     outputTokens += usage.outputTokens.total
                   }
                   if (usage.inputTokens.total !== undefined) {
+                    inputTokens += usage.inputTokens.total
                     maybeSend({
                       agentId,
                       part: new Usage({
-                        inputTokens: usage.inputTokens.total,
+                        contextTokens: usage.inputTokens.total,
+                        inputTokens,
                         outputTokens,
                       }),
                     })
@@ -704,6 +707,7 @@ export class ScriptEnd extends Schema.TaggedClass<ScriptEnd>()(
  * @category Output
  */
 export class Usage extends Schema.TaggedClass<Usage>()("Usage", {
+  contextTokens: Schema.Number,
   inputTokens: Schema.Number,
   outputTokens: Schema.Number,
 }) {}

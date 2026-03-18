@@ -212,7 +212,9 @@ const SearchTool = Toolkit.make(
   Tool.make("search", {
     description: "Semantic code search",
     parameters: Schema.Struct({
-      query: Schema.String,
+      query: Schema.String.annotate({
+        documentation: "Describe what you are looking for",
+      }),
       limit: Schema.optional(Schema.Finite).annotate({
         documentation: "Number of results (defaults to 5, max 10)",
       }),

@@ -78,7 +78,7 @@ ${output.summary}\n\n`
           return `${prefix}${chalk.red(`Error: ${output.error.reason._tag}. Retrying...`)}\n\n${chalk.dim(Cause.pretty(Cause.fail(output.error)))}\n\n`
         }
         case "Usage": {
-          return `${prefix}${chalkInfoHeading(`${infoIcon} Usage:`)} ${numberFormat.format(output.inputTokens)} input / ${numberFormat.format(output.outputTokens)} output\n\n`
+          return `${prefix}${chalkInfoHeading(`${infoIcon} Usage:`)} ${numberFormat.format(output.inputTokens)} context / ${numberFormat.format(output.inputTokens)} input / ${numberFormat.format(output.outputTokens)} output\n\n`
         }
       }
     }),
