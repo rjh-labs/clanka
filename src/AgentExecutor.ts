@@ -38,6 +38,7 @@ import * as RpcGroup from "effect/unstable/rpc/RpcGroup"
 import * as Rpc from "effect/unstable/rpc/Rpc"
 import * as Result from "effect/Result"
 import { SemanticSearch } from "./SemanticSearch.ts"
+import * as References from "effect/References"
 
 /**
  * @since 1.0.0
@@ -128,6 +129,7 @@ export const makeLocal = Effect.fnUntraced(function* <
         ServiceMap.add(CurrentDirectory, options.directory),
         ServiceMap.add(SubagentExecutor, opts.onSubagent),
         ServiceMap.add(Console.Console, console),
+        ServiceMap.add(References.CurrentLogAnnotations, {}),
         Option.isSome(search)
           ? ServiceMap.add(SemanticSearch, search.value)
           : identity,
