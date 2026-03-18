@@ -497,6 +497,7 @@ DO NOT output the final result without wrapping it with "taskComplete".
 Make sure every detail of the task is done before calling "taskComplete".
 
 Apart from standard javascript apis, **you only have the following** functions available to you:
+DO NOT use node.js apis.
 
 \`\`\`ts
 ${capabilities.toolsDts}
