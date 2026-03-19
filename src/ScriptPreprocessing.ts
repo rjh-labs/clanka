@@ -131,10 +131,46 @@ const findTypeAnnotationAssignment = (text: string, start: number): number => {
   return -1
 }
 
+const findClosingParen = (text: string, openParen: number): number => {
+  let depth = 1
+  for (let i = openParen + 1; i < text.length; i++) {
+    const char = text[i]!
+    if (char === "(") {
+      depth++
+      continue
+    }
+    if (char === ")") {
+      depth--
+      if (depth === 0) {
+        return i
+      }
+    }
+  }
+  return -1
+}
+
+const findCallTemplateEnd = (
+  text: string,
+  templateStart: number,
+  openParen: number,
+): number => {
+  const closeParen = findClosingParen(text, openParen)
+  if (closeParen === -1) {
+    return -1
+  }
+
+  for (let i = closeParen - 1; i > templateStart; i--) {
+    if (text[i] === "`" && !isEscaped(text, i)) {
+      return i
+    }
+  }
+
+  return -1
+}
+
 const fixCallTemplateArgument = (
   script: string,
   functionName: string,
-  isTerminator: (char: string | undefined) => boolean,
 ): string => {
   let out = script
   let cursor = 0
@@ -157,7 +193,7 @@ const fixCallTemplateArgument = (
       continue
     }
 
-    const templateEnd = findTemplateEnd(out, templateStart, isTerminator)
+    const templateEnd = findCallTemplateEnd(out, templateStart, openParen)
     if (templateEnd === -1) {
       cursor = templateStart + 1
       continue
@@ -413,8 +449,7 @@ const fixAssignedTemplatesForToolCalls = (script: string): string => {
 export const preprocessScript = (script: string): string =>
   fixAssignedTemplatesForToolCalls(
     ["applyPatch", "taskComplete"].reduce(
-      (current, functionName) =>
-        fixCallTemplateArgument(current, functionName, (char) => char === ")"),
+      (current, functionName) => fixCallTemplateArgument(current, functionName),
       fixWriteFileContentTemplates(script),
     ),
   )
