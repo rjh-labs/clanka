@@ -143,7 +143,7 @@ export const AgentTools = Toolkit.make(
   }),
   Tool.make("applyPatch", {
     description:
-      "Apply a git diff / unified diff patch, or a wrapped patch, across one or more files.",
+      "Add, update or remove multiple files with a git diff / unified diff / wrapped patch.",
     parameters: Schema.String.annotate({
       identifier: "patch",
     }),
