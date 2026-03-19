@@ -124,7 +124,7 @@ export const AgentTools = Toolkit.make(
     parameters: Schema.Struct({
       command: Schema.String,
       timeoutMs: Schema.optional(Schema.Finite).annotate({
-        documentation: "Timeout in ms (default: 120000)",
+        documentation: "Timeout in ms (default: 120000, max 4 minutes)",
       }),
     }).annotate({
       identifier: "command",
@@ -372,7 +372,7 @@ export const AgentToolHandlersNoDeps = AgentToolsWithSearch.toLayer(
         return yield* Effect.promise(() => Glob.glob(pattern, { cwd }))
       }),
       bash: Effect.fn("AgentTools.bash")(function* (options) {
-        const timeoutMs = options.timeoutMs ?? 120_000
+        const timeoutMs = Math.min(options.timeoutMs ?? 120_000, 240_000)
         yield* Effect.logInfo(`Calling "bash"`).pipe(
           Effect.annotateLogs({
             ...options,
