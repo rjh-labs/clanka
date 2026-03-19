@@ -157,7 +157,7 @@ describe("preprocessScript", () => {
     )
   })
 
-  it.each(["patch", "patch2", "patch3", "patch4"])(
+  it.each(["patch", "patch2", "patch3", "patch4", "patch5"])(
     "fixes broken %s",
     (fixture) => {
       const content = readFileSync(

@@ -74,23 +74,33 @@ const needsTemplateEscaping = (text: string): boolean => {
   return false
 }
 
+const normalizePatchEscapedQuotes = (text: string): string =>
+  text.includes("*** Begin Patch")
+    ? text.replace(/\\"([A-Za-z0-9_$.-]+)\\"/g, '"$1"')
+    : text
+
 const escapeTemplateLiteralContent = (text: string): string => {
-  if (!needsTemplateEscaping(text)) {
-    return text
+  const normalized = normalizePatchEscapedQuotes(text)
+  if (!needsTemplateEscaping(normalized)) {
+    return normalized
   }
 
   let out = ""
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i]!
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized[i]!
     if (char === "\\") {
       out += "\\\\"
       continue
     }
-    if (char === "`" && !isEscaped(text, i)) {
+    if (char === "`" && !isEscaped(normalized, i)) {
       out += "\\`"
       continue
     }
-    if (char === "$" && text[i + 1] === "{" && !isEscaped(text, i)) {
+    if (
+      char === "$" &&
+      normalized[i + 1] === "{" &&
+      !isEscaped(normalized, i)
+    ) {
       out += "\\$"
       continue
     }
@@ -438,6 +448,9 @@ const fixAssignedTemplatesForToolCalls = (script: string): string => {
   }
   for (const identifier of collectWriteFileContentIdentifiers(script)) {
     identifiers.add(identifier)
+  }
+  if (script.includes("*** Begin Patch")) {
+    identifiers.add("patch")
   }
 
   let out = script
