@@ -71,7 +71,7 @@ const layerModel = (
       store: false,
       reasoning: {
         effort: options?.reasoning?.effort ?? "medium",
-        summary: "auto",
+        summary: options?.reasoning?.summary ?? "detailed",
       },
     },
   }).pipe(

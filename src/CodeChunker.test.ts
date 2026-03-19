@@ -334,4 +334,17 @@ describe("chunkFileContent", () => {
     assert(runLoopChunk, "Expected to find a chunk for the runLoop method")
     assert.strictEqual(runLoopChunk.type, "method")
   })
+
+  it("chunks ts namespaces", () => {
+    const fixture = readFileSync(
+      join(__dirname, "fixtures", "yieldable.txt"),
+      "utf-8",
+    )
+    const chunks = chunkFileContent("src/Effect.ts", fixture, {
+      chunkSize: 30,
+      chunkOverlap: 0,
+    })
+    const names = chunks.map((chunk) => chunk.name)
+    assert.deepStrictEqual(names, ["Yieldable", "Any", "Success"])
+  })
 })
