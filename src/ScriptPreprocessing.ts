@@ -81,6 +81,7 @@ const normalizePatchEscapedQuotes = (text: string): string =>
 
 const escapeTemplateLiteralContent = (text: string): string => {
   const normalized = normalizePatchEscapedQuotes(text)
+  const isPatchContent = normalized.includes("*** Begin Patch")
   if (!needsTemplateEscaping(normalized)) {
     return normalized
   }
@@ -89,6 +90,14 @@ const escapeTemplateLiteralContent = (text: string): string => {
   for (let i = 0; i < normalized.length; i++) {
     const char = normalized[i]!
     if (char === "\\") {
+      if (
+        !isPatchContent &&
+        (normalized[i + 1] === "`" ||
+          (normalized[i + 1] === "$" && normalized[i + 2] === "{"))
+      ) {
+        out += "\\"
+        continue
+      }
       out += "\\\\"
       continue
     }
@@ -224,6 +233,68 @@ const fixCallTemplateArgument = (
   return out
 }
 
+const fixCallObjectPropertyTemplate = (
+  script: string,
+  functionName: string,
+  propertyName: string,
+): string => {
+  let out = script
+  let cursor = 0
+
+  while (cursor < out.length) {
+    const callStart = findNextIdentifier(out, functionName, cursor)
+    if (callStart === -1) {
+      break
+    }
+
+    const openParen = skipWhitespace(out, callStart + functionName.length)
+    if (out[openParen] !== "(") {
+      cursor = callStart + functionName.length
+      continue
+    }
+
+    const propertyKey = findNextIdentifier(out, propertyName, openParen + 1)
+    if (propertyKey === -1) {
+      cursor = openParen + 1
+      continue
+    }
+
+    const colon = skipWhitespace(out, propertyKey + propertyName.length)
+    if (out[colon] !== ":") {
+      cursor = propertyKey + propertyName.length
+      continue
+    }
+
+    const templateStart = skipWhitespace(out, colon + 1)
+    if (out[templateStart] !== "`") {
+      cursor = templateStart + 1
+      continue
+    }
+
+    const templateEnd = findTemplateEnd(
+      out,
+      templateStart,
+      (char) => char === "}" || char === ",",
+    )
+    if (templateEnd === -1) {
+      cursor = templateStart + 1
+      continue
+    }
+
+    const original = out.slice(templateStart + 1, templateEnd)
+    const escaped = escapeTemplateLiteralContent(original)
+    if (escaped !== original) {
+      out = `${out.slice(0, templateStart + 1)}${escaped}${out.slice(templateEnd)}`
+      cursor = templateEnd + (escaped.length - original.length) + 1
+      continue
+    }
+
+    cursor = templateEnd + 1
+  }
+
+  return out
+}
+
 const collectCallArgumentIdentifiers = (
   script: string,
   functionName: string,
@@ -261,91 +332,38 @@ const collectCallArgumentIdentifiers = (
   return out
 }
 
-const fixWriteFileContentTemplates = (script: string): string => {
-  let out = script
-  let cursor = 0
-
-  while (cursor < out.length) {
-    const callStart = findNextIdentifier(out, "writeFile", cursor)
-    if (callStart === -1) {
-      break
-    }
-
-    const openParen = skipWhitespace(out, callStart + "writeFile".length)
-    if (out[openParen] !== "(") {
-      cursor = callStart + "writeFile".length
-      continue
-    }
-
-    const contentKey = findNextIdentifier(out, "content", openParen + 1)
-    if (contentKey === -1) {
-      cursor = openParen + 1
-      continue
-    }
-
-    const colon = skipWhitespace(out, contentKey + "content".length)
-    if (out[colon] !== ":") {
-      cursor = contentKey + "content".length
-      continue
-    }
-
-    const templateStart = skipWhitespace(out, colon + 1)
-    if (out[templateStart] !== "`") {
-      cursor = templateStart + 1
-      continue
-    }
-
-    const templateEnd = findTemplateEnd(
-      out,
-      templateStart,
-      (char) => char === "}" || char === ",",
-    )
-    if (templateEnd === -1) {
-      cursor = templateStart + 1
-      continue
-    }
-
-    const original = out.slice(templateStart + 1, templateEnd)
-    const escaped = escapeTemplateLiteralContent(original)
-    if (escaped !== original) {
-      out = `${out.slice(0, templateStart + 1)}${escaped}${out.slice(templateEnd)}`
-      cursor = templateEnd + (escaped.length - original.length) + 1
-      continue
-    }
-
-    cursor = templateEnd + 1
-  }
-
-  return out
-}
-
-const collectWriteFileContentIdentifiers = (
+const collectCallObjectPropertyIdentifiers = (
   script: string,
+  functionName: string,
+  propertyName: string,
 ): ReadonlySet<string> => {
   const out = new Set<string>()
   let cursor = 0
 
   while (cursor < script.length) {
-    const callStart = findNextIdentifier(script, "writeFile", cursor)
+    const callStart = findNextIdentifier(script, functionName, cursor)
     if (callStart === -1) {
       break
     }
 
-    const openParen = skipWhitespace(script, callStart + "writeFile".length)
+    const openParen = skipWhitespace(script, callStart + functionName.length)
     if (script[openParen] !== "(") {
-      cursor = callStart + "writeFile".length
+      cursor = callStart + functionName.length
       continue
     }
 
-    const contentKey = findNextIdentifier(script, "content", openParen + 1)
-    if (contentKey === -1) {
+    const propertyKey = findNextIdentifier(script, propertyName, openParen + 1)
+    if (propertyKey === -1) {
       cursor = openParen + 1
       continue
     }
 
-    const afterContent = skipWhitespace(script, contentKey + "content".length)
-    if (script[afterContent] === ":") {
-      const valueStart = skipWhitespace(script, afterContent + 1)
+    const afterProperty = skipWhitespace(
+      script,
+      propertyKey + propertyName.length,
+    )
+    if (script[afterProperty] === ":") {
+      const valueStart = skipWhitespace(script, afterProperty + 1)
       const identifier = parseIdentifier(script, valueStart)
       if (identifier !== undefined) {
         const valueEnd = skipWhitespace(script, identifier.end)
@@ -357,17 +375,29 @@ const collectWriteFileContentIdentifiers = (
       continue
     }
 
-    if (script[afterContent] === "}" || script[afterContent] === ",") {
-      out.add("content")
-      cursor = afterContent + 1
+    if (script[afterProperty] === "}" || script[afterProperty] === ",") {
+      out.add(propertyName)
+      cursor = afterProperty + 1
       continue
     }
 
-    cursor = afterContent + 1
+    cursor = afterProperty + 1
   }
 
   return out
 }
+
+const callObjectPropertyTargets = [
+  ["writeFile", "content"],
+  ["updateTask", "description"],
+] as const
+
+const fixTargetCallObjectPropertyTemplates = (script: string): string =>
+  callObjectPropertyTargets.reduce(
+    (current, [functionName, propertyName]) =>
+      fixCallObjectPropertyTemplate(current, functionName, propertyName),
+    script,
+  )
 
 const fixAssignedTemplate = (script: string, variableName: string): string => {
   let out = script
@@ -446,8 +476,14 @@ const fixAssignedTemplatesForToolCalls = (script: string): string => {
       identifiers.add(identifier)
     }
   }
-  for (const identifier of collectWriteFileContentIdentifiers(script)) {
-    identifiers.add(identifier)
+  for (const [functionName, propertyName] of callObjectPropertyTargets) {
+    for (const identifier of collectCallObjectPropertyIdentifiers(
+      script,
+      functionName,
+      propertyName,
+    )) {
+      identifiers.add(identifier)
+    }
   }
   if (script.includes("*** Begin Patch")) {
     identifiers.add("patch")
@@ -464,6 +500,6 @@ export const preprocessScript = (script: string): string =>
   fixAssignedTemplatesForToolCalls(
     ["applyPatch", "taskComplete"].reduce(
       (current, functionName) => fixCallTemplateArgument(current, functionName),
-      fixWriteFileContentTemplates(script),
+      fixTargetCallObjectPropertyTemplates(script),
     ),
   )
