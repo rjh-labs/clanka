@@ -204,14 +204,10 @@ export const AgentTools = Toolkit.make(
 
 const SearchTool = Toolkit.make(
   Tool.make("search", {
-    description: "Semantic code search",
-    parameters: Schema.Struct({
-      query: Schema.String.annotate({
-        documentation: "Describe what you are looking for",
-      }),
-      limit: Schema.optional(Schema.Finite).annotate({
-        documentation: "Number of results (defaults to 5, max 10)",
-      }),
+    description:
+      "Semantic code search - you just need to describe what you are looking for",
+    parameters: Schema.String.annotate({
+      identifier: "query",
     }),
     success: Schema.String,
     dependencies: [SemanticSearch.SemanticSearch],
@@ -327,14 +323,14 @@ export const AgentToolHandlersNoDeps = AgentToolsWithSearch.toLayer(
           .readDirectory(pathService.resolve(cwd, path))
           .pipe(Effect.orDie)
       }),
-      search: Effect.fn("AgentTools.search")(function* (options) {
+      search: Effect.fn("AgentTools.search")(function* (query) {
         yield* Effect.logInfo(`Calling "search"`).pipe(
-          Effect.annotateLogs(options),
+          Effect.annotateLogs({ query }),
         )
         const ss = yield* SemanticSearch.SemanticSearch
         return yield* ss.search({
-          query: options.query,
-          limit: Math.min(10, options.limit ?? 5),
+          query,
+          limit: 5,
         })
       }),
       rg: Effect.fn("AgentTools.rg")(function* (options) {
