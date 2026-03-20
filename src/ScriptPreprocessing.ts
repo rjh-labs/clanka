@@ -191,7 +191,24 @@ const needsTemplateEscaping = (text: string): boolean => {
 
 const normalizePatchEscapedQuotes = (text: string): string =>
   text.includes("*** Begin Patch")
-    ? text.replace(/\\"([A-Za-z0-9_$.-]+)\\"/g, '"$1"')
+    ? text.replace(/\\"([A-Za-z0-9_$.-]+)\\"/g, (match, content, index) => {
+        const previous = text[findPreviousNonWhitespace(text, index - 1)]
+        const next = text[findNextNonWhitespace(text, index + match.length)]
+        if (
+          previous === "{" ||
+          previous === "[" ||
+          previous === ":" ||
+          previous === "," ||
+          next === ":" ||
+          next === "}" ||
+          next === "]" ||
+          next === ","
+        ) {
+          return match
+        }
+
+        return `"${content}"`
+      })
     : text
 
 const normalizeNonPatchEscapedTemplateMarkers = (text: string): string =>
@@ -205,7 +222,10 @@ const escapeTemplateLiteralContent = (text: string): string => {
   const normalized = isPatchContent
     ? normalizedPatchQuotes
     : normalizeNonPatchEscapedTemplateMarkers(normalizedPatchQuotes)
-  if (!needsTemplateEscaping(normalized)) {
+  if (
+    !needsTemplateEscaping(normalized) &&
+    !(isPatchContent && normalized.includes("\\"))
+  ) {
     return normalized
   }
 

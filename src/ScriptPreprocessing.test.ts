@@ -167,6 +167,7 @@ describe("preprocessScript", () => {
     "patch7",
     "patch8",
     "patch9",
+    "patch10",
   ])("fixes broken %s", (fixture) => {
     const content = readFileSync(
       join(__dirname, "fixtures", `${fixture}-broken.txt`),
