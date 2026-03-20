@@ -51,7 +51,7 @@ export const makeEmbeddingResolver = (
     RequestResolver.setDelay(
       options.embeddingRequestDelay ?? Duration.millis(50),
     ),
-    RequestResolver.batchN(options.embeddingBatchSize ?? 500),
+    RequestResolver.batchN(options.embeddingBatchSize ?? 300),
   )
 
 export const chunkEmbeddingInput = (chunk: CodeChunker.CodeChunk): string => {
