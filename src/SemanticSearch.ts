@@ -47,7 +47,7 @@ const resolveChunkConfig = (options: {
 }) => ({
   chunkSize: 30,
   chunkOverlap: 0,
-  chunkMaxCharacters: options.chunkMaxCharacters ?? 30_000,
+  chunkMaxCharacters: options.chunkMaxCharacters ?? 10_000,
 })
 
 export const makeEmbeddingResolver = (
