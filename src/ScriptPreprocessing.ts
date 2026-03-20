@@ -79,9 +79,15 @@ const normalizePatchEscapedQuotes = (text: string): string =>
     ? text.replace(/\\"([A-Za-z0-9_$.-]+)\\"/g, '"$1"')
     : text
 
+const normalizeNonPatchEscapedTemplateMarkers = (text: string): string =>
+  text.replace(/\\{2,}(?=`|\$\{)/g, "\\")
+
 const escapeTemplateLiteralContent = (text: string): string => {
-  const normalized = normalizePatchEscapedQuotes(text)
-  const isPatchContent = normalized.includes("*** Begin Patch")
+  const normalizedPatchQuotes = normalizePatchEscapedQuotes(text)
+  const isPatchContent = normalizedPatchQuotes.includes("*** Begin Patch")
+  const normalized = isPatchContent
+    ? normalizedPatchQuotes
+    : normalizeNonPatchEscapedTemplateMarkers(normalizedPatchQuotes)
   if (!needsTemplateEscaping(normalized)) {
     return normalized
   }
