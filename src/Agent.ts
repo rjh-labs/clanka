@@ -487,9 +487,10 @@ const generateSystemTools = (
     : ""
 }
 - Do as much work as possible in a single script, using \`Promise.all\` to run multiple functions in parallel.
+- You can add / update / remove multiple files in one go with "applyPatch".
 - AVOID passing scripts into the "bash" function, and instead write javascript.
 - **Variables are not shared** between executions, so you must include all necessary code in each script you execute.
-- DO NOT use \`require\`, \`import\`, \`process\`, or any other node apis.
+- DO NOT use \`require\`, \`import\`, \`process\`, or any other node.js apis.
 
 When you have fully completed your task, call the "taskComplete" function with the final output.
 DO NOT output the final result without wrapping it with "taskComplete".
