@@ -316,6 +316,127 @@ const findClosingParen = (text: string, openParen: number): number => {
   return -1
 }
 
+const findClosingBrace = (text: string, openBrace: number): number => {
+  let depth = 1
+  let stringDelimiter: '"' | "'" | "`" | undefined
+
+  for (let i = openBrace + 1; i < text.length; i++) {
+    const char = text[i]!
+
+    if (stringDelimiter !== undefined) {
+      if (char === stringDelimiter && !isEscaped(text, i)) {
+        stringDelimiter = undefined
+      }
+      continue
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      stringDelimiter = char
+      continue
+    }
+
+    if (char === "{") {
+      depth++
+      continue
+    }
+
+    if (char === "}") {
+      depth--
+      if (depth === 0) {
+        return i
+      }
+    }
+  }
+
+  return -1
+}
+
+const fixObjectLiteralTemplateValues = (text: string): string =>
+  text.replace(/\\{2,}(?=`|\$\{)/g, "\\")
+
+const fixAssignedObjectTemplateValues = (
+  script: string,
+  variableName: string,
+): string => {
+  let out = script
+  let cursor = 0
+
+  while (cursor < out.length) {
+    const variableStart = findNextIdentifier(out, variableName, cursor)
+    if (variableStart === -1) {
+      break
+    }
+
+    let assignmentStart = skipWhitespace(
+      out,
+      variableStart + variableName.length,
+    )
+    if (out[assignmentStart] === ":") {
+      assignmentStart = findTypeAnnotationAssignment(out, assignmentStart + 1)
+      if (assignmentStart === -1) {
+        cursor = variableStart + variableName.length
+        continue
+      }
+    }
+
+    if (
+      out[assignmentStart] !== "=" ||
+      out[assignmentStart + 1] === "=" ||
+      out[assignmentStart + 1] === ">"
+    ) {
+      cursor = variableStart + variableName.length
+      continue
+    }
+
+    const objectStart = skipWhitespace(out, assignmentStart + 1)
+    if (out[objectStart] !== "{") {
+      cursor = objectStart + 1
+      continue
+    }
+
+    const objectEnd = findClosingBrace(out, objectStart)
+    if (objectEnd === -1) {
+      cursor = objectStart + 1
+      continue
+    }
+
+    const original = out.slice(objectStart, objectEnd + 1)
+    const escaped = fixObjectLiteralTemplateValues(original)
+    if (escaped !== original) {
+      out = `${out.slice(0, objectStart)}${escaped}${out.slice(objectEnd + 1)}`
+      cursor = objectEnd + (escaped.length - original.length) + 1
+      continue
+    }
+
+    cursor = objectEnd + 1
+  }
+
+  return out
+}
+
+const escapeRegExp = (text: string): string =>
+  text.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")
+
+const collectObjectEntryMapSources = (
+  script: string,
+  valueIdentifier: string,
+): ReadonlySet<string> => {
+  const out = new Set<string>()
+  const pattern = new RegExp(
+    `Object\\.entries\\(\\s*([A-Za-z_$][A-Za-z0-9_$]*)\\s*\\)\\s*\\.map\\(\\s*(?:async\\s*)?\\(\\s*\\[\\s*[A-Za-z_$][A-Za-z0-9_$]*\\s*,\\s*${escapeRegExp(valueIdentifier)}\\s*\\]\\s*\\)\\s*=>`,
+    "g",
+  )
+
+  for (const match of script.matchAll(pattern)) {
+    const sourceIdentifier = match[1]
+    if (sourceIdentifier !== undefined) {
+      out.add(sourceIdentifier)
+    }
+  }
+
+  return out
+}
+
 const findCallTemplateEnd = (
   text: string,
   templateStart: number,
@@ -641,9 +762,22 @@ const fixAssignedTemplatesForToolCalls = (script: string): string => {
     identifiers.add("patch")
   }
 
+  const objectTemplateIdentifiers = new Set<string>()
+  for (const identifier of identifiers) {
+    for (const sourceIdentifier of collectObjectEntryMapSources(
+      script,
+      identifier,
+    )) {
+      objectTemplateIdentifiers.add(sourceIdentifier)
+    }
+  }
+
   let out = script
   for (const identifier of identifiers) {
     out = fixAssignedTemplate(out, identifier)
+  }
+  for (const identifier of objectTemplateIdentifiers) {
+    out = fixAssignedObjectTemplateValues(out, identifier)
   }
   return out
 }
