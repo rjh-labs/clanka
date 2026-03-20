@@ -5,6 +5,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "bin": {
+    "clanka": "dist/cli.js"
+  },
   "exports": {
     ".": "./dist/index.js",
     "./*": "./dist/*.js",

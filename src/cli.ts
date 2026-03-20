@@ -1,0 +1,169 @@
+#!/usr/bin/env node
+import * as Effect from "effect/Effect"
+import * as Prompt from "effect/unstable/cli/Prompt"
+import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient"
+import * as NodeServices from "@effect/platform-node/NodeServices"
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
+import * as NodeSocket from "@effect/platform-node/NodeSocket"
+import * as Codex from "./Codex.ts"
+import * as Copilot from "./Copilot.ts"
+import * as Agent from "./Agent.ts"
+import * as Stream from "effect/Stream"
+import * as OutputFormatter from "./OutputFormatter.ts"
+import * as Stdio from "effect/Stdio"
+import { pipe } from "effect/Function"
+import * as Layer from "effect/Layer"
+import * as Path from "effect/Path"
+import * as Config from "effect/Config"
+import * as KeyValueStore from "effect/unstable/persistence/KeyValueStore"
+import * as SemanticSearch from "./SemanticSearch.ts"
+import * as Option from "effect/Option"
+import { OpenAiClient, OpenAiEmbeddingModel } from "@effect/ai-openai"
+
+const Kvs = Layer.unwrap(
+  Effect.gen(function* () {
+    const path = yield* Path.Path
+
+    const configHome = yield* Config.nonEmptyString("XDG_CONFIG_HOME").pipe(
+      Config.orElse(() =>
+        Config.nonEmptyString("HOME").pipe(
+          Config.map((home) => path.join(home, ".config")),
+        ),
+      ),
+    )
+    return KeyValueStore.layerFileSystem(path.join(configHome, "clanka"))
+  }),
+).pipe(Layer.provide(NodeServices.layer))
+
+const Search = Layer.unwrap(
+  Effect.gen(function* () {
+    const apiKey = yield* Config.redacted("OPENAI_API_KEY").pipe(Config.option)
+
+    if (Option.isNone(apiKey)) {
+      yield* Effect.logWarning("OPENAI_API_KEY is not set")
+      return Layer.empty
+    }
+
+    const path = yield* Path.Path
+
+    return SemanticSearch.layer({
+      directory: process.cwd(),
+      database: path.join(".clanka", "search.sqlite"),
+    }).pipe(
+      Layer.provide(
+        OpenAiEmbeddingModel.model("text-embedding-3-small", {
+          dimensions: 1536,
+        }),
+      ),
+      Layer.provide(
+        OpenAiClient.layer({
+          apiKey: apiKey.value,
+        }),
+      ),
+    )
+  }),
+).pipe(Layer.provide([NodeServices.layer, NodeHttpClient.layerUndici]))
+
+Effect.gen(function* () {
+  const stdio = yield* Stdio.Stdio
+
+  const provider = yield* Prompt.select({
+    message: "Select a provider",
+    choices: [
+      {
+        title: "openai",
+        value: "openai",
+        selected: true,
+      },
+      {
+        title: "copilot",
+        value: "copilot",
+      },
+    ],
+  })
+  const modelRaw = yield* Prompt.text({
+    message: "Enter a model",
+    default: "gpt-5.4/medium",
+    validate(value) {
+      const parts = value.split("/")
+      if (parts.length !== 2) {
+        return Effect.fail("Invalid model")
+      }
+      return Effect.succeed(value)
+    },
+  })
+  const semantic = yield* Prompt.confirm({
+    message: "Use semantic search? (uses OPENAI_API_KEY env var)",
+  })
+
+  const [model, reasoning] = modelRaw.split("/") as [string, string]
+  const Model =
+    provider === "openai"
+      ? Codex.modelWebSocket(model, {
+          reasoning: {
+            effort: reasoning as any,
+          },
+        }).pipe(
+          Layer.merge(
+            Agent.layerSubagentModel(
+              Codex.modelWebSocket("gpt-5.4-mini", {
+                reasoning: {
+                  effort: "high",
+                },
+              }),
+            ),
+          ),
+          Layer.provide(Codex.layerClient),
+        )
+      : Copilot.model(model, {
+          reasoning: {
+            effort: reasoning,
+          },
+        }).pipe(
+          Layer.merge(
+            Agent.layerSubagentModel(
+              Copilot.model(model, {
+                reasoning: {
+                  effort: "medium",
+                },
+              }),
+            ),
+          ),
+          Layer.provide(Copilot.layerClient),
+        )
+
+  return yield* Effect.gen(function* () {
+    const agent = yield* Agent.Agent
+
+    while (true) {
+      const prompt = yield* Prompt.text({
+        message: ">",
+      })
+
+      yield* pipe(
+        agent.send({ prompt }),
+        Stream.unwrap,
+        OutputFormatter.pretty({ outputTruncation: 30 }),
+        Stream.run(stdio.stdout()),
+      )
+
+      console.log("")
+    }
+  }).pipe(
+    Effect.provide([
+      Agent.layerLocal({
+        directory: process.cwd(),
+      }),
+      Model,
+      semantic ? Search : Layer.empty,
+    ]),
+  )
+}).pipe(
+  Effect.provide([
+    NodeServices.layer,
+    Kvs,
+    NodeHttpClient.layerUndici,
+    NodeSocket.layerWebSocketConstructorWS,
+  ]),
+  NodeRuntime.runMain,
+)
