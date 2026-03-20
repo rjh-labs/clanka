@@ -71,7 +71,6 @@ const semantic = Flag.boolean("search").pipe(
 
 const prompt = Flag.string("prompt").pipe(
   Flag.withDescription("Pass a prompt in non-interactive mode"),
-  Flag.withAlias("p"),
   Flag.optional,
 )
 
