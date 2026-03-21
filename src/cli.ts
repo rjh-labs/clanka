@@ -58,9 +58,12 @@ const model = Flag.string("model").pipe(
   ),
 )
 
-const semantic = Flag.boolean("search").pipe(
-  Flag.withDescription("Use semantic search? (uses OPENAI_API_KEY env var)"),
+const semantic = Flag.directory("search").pipe(
+  Flag.withDescription(
+    "Directory for semantic search data (uses OPENAI_API_KEY env var)",
+  ),
   Flag.withAlias("s"),
+  Flag.optional,
 )
 
 const prompt = Flag.string("prompt").pipe(
@@ -83,38 +86,41 @@ const Kvs = Layer.unwrap(
   }),
 ).pipe(Layer.provide(NodeServices.layer))
 
-const Search = Layer.unwrap(
-  Effect.gen(function* () {
-    const apiKey = yield* Config.redacted("OPENAI_API_KEY").pipe(Config.option)
+const Search = (directory: string) =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const apiKey = yield* Config.redacted("OPENAI_API_KEY").pipe(
+        Config.option,
+      )
 
-    if (Option.isNone(apiKey)) {
-      yield* Effect.logWarning("OPENAI_API_KEY is not set")
-      return Layer.empty
-    }
+      if (Option.isNone(apiKey)) {
+        yield* Effect.logWarning("OPENAI_API_KEY is not set")
+        return Layer.empty
+      }
 
-    const path = yield* Path.Path
+      const path = yield* Path.Path
 
-    const SemanticSearch = yield* Effect.promise(
-      () => import("./SemanticSearch.ts"),
-    )
+      const SemanticSearch = yield* Effect.promise(
+        () => import("./SemanticSearch.ts"),
+      )
 
-    return SemanticSearch.layer({
-      directory: process.cwd(),
-      database: path.join(".clanka", "search.sqlite"),
-    }).pipe(
-      Layer.provide(
-        OpenAiEmbeddingModel.model("text-embedding-3-small", {
-          dimensions: 1536,
-        }),
-      ),
-      Layer.provide(
-        OpenAiClient.layer({
-          apiKey: apiKey.value,
-        }),
-      ),
-    )
-  }),
-).pipe(Layer.provide([NodeServices.layer, NodeHttpClient.layerUndici]))
+      return SemanticSearch.layer({
+        directory: process.cwd(),
+        database: path.join(directory, "search.sqlite"),
+      }).pipe(
+        Layer.provide(
+          OpenAiEmbeddingModel.model("text-embedding-3-small", {
+            dimensions: 1536,
+          }),
+        ),
+        Layer.provide(
+          OpenAiClient.layer({
+            apiKey: apiKey.value,
+          }),
+        ),
+      )
+    }),
+  ).pipe(Layer.provide([NodeServices.layer, NodeHttpClient.layerUndici]))
 
 Command.make("clanka", { provider, model, semantic, prompt }).pipe(
   Command.withHandler(
@@ -193,7 +199,10 @@ Command.make("clanka", { provider, model, semantic, prompt }).pipe(
             directory: process.cwd(),
           }),
           Model,
-          semantic ? Search : Layer.empty,
+          Option.match(semantic, {
+            onNone: () => Layer.empty,
+            onSome: Search,
+          }),
         ]),
       )
     }),
