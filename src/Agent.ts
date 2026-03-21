@@ -176,7 +176,7 @@ ${content}
     const generateSystem =
       typeof opts.system === "function" ? opts.system : defaultSystem
 
-    const toolInstructions = generateSystemTools(capabilities)
+    const toolInstructions = generateSystemTools(capabilities, conversationMode)
     let system = generateSystem({
       toolInstructions,
       agentsMd: Option.getOrElse(agentsMd, () => ""),
@@ -485,6 +485,7 @@ ${options.agentsMd}
 
 const generateSystemTools = (
   capabilities: AgentExecutor.Capabilities,
+  conversationMode: boolean,
 ) => `**YOU ONLY HAVE ACCESS TO ONE TOOL** "execute", to run javascript code to do your work.
 
 - Use \`console.log\` to print any output you need.
@@ -498,11 +499,15 @@ const generateSystemTools = (
 - You can add / update / remove multiple files in one go with "applyPatch".
 - AVOID passing scripts into the "bash" function, and instead write javascript.
 - **Variables are not shared** between executions, so you must include all necessary code in each script you execute.
-- DO NOT use \`require\`, \`import\`, \`process\`, or any other node.js apis.
+- DO NOT use \`require\`, \`import\`, \`process\`, or any other node.js apis.${
+  conversationMode
+    ? ""
+    : `
 
 When you have fully completed your task, call the "taskComplete" function with the final output.
 DO NOT output the final result without wrapping it with "taskComplete".
-Make sure every detail of the task is done before calling "taskComplete".
+Make sure every detail of the task is done before calling "taskComplete".`
+}
 
 You have these functions available to you:
 
