@@ -665,7 +665,7 @@ const responseToSummary = (
   for (const message of prompt.content) {
     if (message.role !== "assistant") continue
     for (const part of message.content) {
-      if (part.type === "text" || part.type === "reasoning") {
+      if (part.type === "text") {
         parts.push(part.text)
       }
     }
