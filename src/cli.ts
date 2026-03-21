@@ -198,6 +198,12 @@ Command.make("clanka", { provider, model, semantic, prompt }).pipe(
       )
     }),
   ),
+  Command.provide(({ prompt }) =>
+    Option.match(prompt, {
+      onNone: () => Layer.empty,
+      onSome: () => Agent.ConversationMode.layer(true),
+    }),
+  ),
   Command.run({
     version: "0.0.1",
   }),

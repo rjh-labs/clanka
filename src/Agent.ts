@@ -163,6 +163,7 @@ ${content}
     const ai = yield* LanguageModel.LanguageModel
     const subagentModel = yield* SubagentModel
     const modelConfig = yield* AgentModelConfig
+    const conversationMode = yield* ConversationMode
     let finalSummary = Option.none<string>()
 
     const output = yield* Queue.make<Output, AgentFinished | AiError.AiError>()
@@ -323,6 +324,7 @@ ${content}
         let response = Array.empty<Response.StreamPart<any>>()
         let reasoningStarted = false
         let hadReasoningDelta = false
+        let hadToolCall = false
         yield* pipe(
           ai.streamText({ prompt: prompt.current, toolkit: singleTool }),
           Stream.takeUntil((part) => {
@@ -388,6 +390,9 @@ ${content}
                     })
                   }
                   break
+                case "tool-call":
+                  hadToolCall = true
+                  break
               }
             }
             return Effect.void
@@ -410,6 +415,9 @@ ${content}
           prompt,
           Prompt.concat(Prompt.fromResponseParts(response)),
         )
+        if (conversationMode && !hadToolCall && pendingMessages.size === 0) {
+          finalSummary = Option.some(responseToSummary(response))
+        }
       }
     }).pipe(
       Effect.provideService(ScriptExecutor, (script) => {
@@ -614,6 +622,20 @@ export const layerSubagentModel = <E, R>(
 
 /**
  * @since 1.0.0
+ * @category Conversation mode
+ */
+export class ConversationMode extends ServiceMap.Reference<boolean>(
+  "clanka/Agent/ConversationMode",
+  {
+    defaultValue: () => false,
+  },
+) {
+  static readonly layer = (enabled: boolean) =>
+    Layer.succeed(ConversationMode, enabled)
+}
+
+/**
+ * @since 1.0.0
  * @category System prompts
  */
 export class AgentModelConfig extends ServiceMap.Reference<{
@@ -628,6 +650,22 @@ export class AgentModelConfig extends ServiceMap.Reference<{
 }) {
   static readonly layer = (options: typeof AgentModelConfig.Service) =>
     Layer.succeed(AgentModelConfig, options)
+}
+
+const responseToSummary = (
+  response: ReadonlyArray<Response.AnyPart>,
+): string => {
+  const prompt = Prompt.fromResponseParts(response)
+  let parts = Array.empty<string>()
+  for (const message of prompt.content) {
+    if (message.role !== "assistant") continue
+    for (const part of message.content) {
+      if (part.type === "text" || part.type === "reasoning") {
+        parts.push(part.text)
+      }
+    }
+  }
+  return parts.join("\n\n")
 }
 
 /**
