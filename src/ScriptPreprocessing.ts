@@ -443,12 +443,25 @@ const findCallTemplateEnd = (
   openParen: number,
 ): number => {
   const closeParen = findClosingParen(text, openParen)
-  if (closeParen === -1) {
+  if (closeParen !== -1) {
+    for (let i = closeParen - 1; i > templateStart; i--) {
+      if (text[i] === "`" && !isEscaped(text, i)) {
+        return i
+      }
+    }
+
     return -1
   }
 
-  for (let i = closeParen - 1; i > templateStart; i--) {
+  const patchEnd = text.indexOf("*** End Patch", templateStart)
+  const fallbackStart = patchEnd === -1 ? templateStart + 1 : patchEnd + 1
+
+  for (let i = fallbackStart; i < text.length; i++) {
     if (text[i] === "`" && !isEscaped(text, i)) {
+      const closeParenCandidate = skipWhitespace(text, i + 1)
+      if (text[closeParenCandidate] !== ")") {
+        continue
+      }
       return i
     }
   }
