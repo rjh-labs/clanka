@@ -234,9 +234,10 @@ const escapeTemplateLiteralContent = (text: string): string => {
     const char = normalized[i]!
     if (char === "\\") {
       if (
-        !isPatchContent &&
-        (normalized[i + 1] === "`" ||
-          (normalized[i + 1] === "$" && normalized[i + 2] === "{"))
+        (normalized[i + 1] === "`" && isEscaped(normalized, i + 1)) ||
+        (normalized[i + 1] === "$" &&
+          normalized[i + 2] === "{" &&
+          isEscaped(normalized, i + 1))
       ) {
         out += "\\"
         continue
