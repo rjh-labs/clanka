@@ -52,6 +52,8 @@ export const TypeId: TypeId = "~clanka/Agent"
 export interface Agent {
   readonly [TypeId]: TypeId
 
+  readonly history: MutableRef.MutableRef<Prompt.Prompt>
+
   /**
    * Send a prompt to the agent and receive a stream of output.
    */
@@ -138,7 +140,7 @@ ${content}
   const outputBuffer = new Map<number, Array<Output>>()
   let currentOutputAgent: number | null = null
 
-  let history = MutableRef.make(Prompt.empty)
+  const history = MutableRef.make(Prompt.empty)
 
   const spawn: (opts: {
     readonly agentId: number
@@ -446,6 +448,7 @@ ${content}
 
   return Agent.of({
     [TypeId]: TypeId,
+    history,
     send: (options) =>
       spawn({
         agentId: agentCounter++,
