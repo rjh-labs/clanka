@@ -91,7 +91,7 @@ export const AgentTools = Toolkit.make(
         documentation: "--glob",
       }),
       filesOnly: Schema.optional(Schema.Boolean).annotate({
-        documentation: "Only return file paths. --files-with-matches",
+        documentation: "Only return file paths --files-with-matches",
       }),
       maxLines: Schema.optional(Schema.Finite).annotate({
         documentation:
@@ -163,15 +163,6 @@ export const AgentTools = Toolkit.make(
     success: Schema.String,
     dependencies: [CurrentDirectory],
   }),
-  Tool.make("writeFile", {
-    description:
-      "Write content to a file, creating parent directories if needed. PREFER USING applyPatch to update existing files.",
-    parameters: Schema.Struct({
-      path: Schema.String,
-      content: Schema.String,
-    }),
-    dependencies: [CurrentDirectory],
-  }),
   Tool.make("applyPatch", {
     description:
       "Add, update or remove multiple files with a git diff / unified diff / wrapped patch.",
@@ -179,6 +170,15 @@ export const AgentTools = Toolkit.make(
       identifier: "patch",
     }),
     success: Schema.String,
+    dependencies: [CurrentDirectory],
+  }),
+  Tool.make("writeFile", {
+    description:
+      "Write content to a file, creating parent directories if needed. Prefer applyPatch to update existing files.",
+    parameters: Schema.Struct({
+      path: Schema.String,
+      content: Schema.String,
+    }),
     dependencies: [CurrentDirectory],
   }),
   Tool.make("removeFile", {
@@ -347,13 +347,13 @@ export const AgentToolHandlersNoDeps = AgentToolsWithSearch.toLayer(
         yield* SemanticSearch.maybeRemoveFile(pathService.relative(cwd, from))
         yield* SemanticSearch.maybeUpdateFile(pathService.relative(cwd, to))
       }, Effect.orDie),
-      ls: Effect.fn("AgentTools.ls")(function* (path) {
+      ls: Effect.fn("AgentTools.ls")(function* (directory) {
         yield* Effect.logInfo(`Calling "ls"`).pipe(
-          Effect.annotateLogs({ path }),
+          Effect.annotateLogs({ directory }),
         )
         const cwd = yield* CurrentDirectory
         return yield* fs
-          .readDirectory(pathService.resolve(cwd, path))
+          .readDirectory(pathService.resolve(cwd, directory))
           .pipe(Effect.orDie)
       }),
       search: Effect.fn("AgentTools.search")(function* (query) {
