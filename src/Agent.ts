@@ -331,7 +331,9 @@ ${content}
         let hadReasoningDelta = false
         let hadToolCall = false
         yield* pipe(
-          ai.streamText({ prompt: prompt.current, toolkit: singleTool }),
+          Stream.suspend(() =>
+            ai.streamText({ prompt: prompt.current, toolkit: singleTool }),
+          ),
           Stream.timeoutOrElse({
             duration: turnTimeout,
             orElse: () => Stream.fail(new Cause.TimeoutError()),
@@ -408,11 +410,25 @@ ${content}
           }),
           Effect.retry({
             while: (err) => {
-              response = []
-              if (err._tag === "TimeoutError") return true
+              if (err._tag === "TimeoutError") {
+                response = []
+                return true
+              }
               if (err.isRetryable) {
                 maybeSend({ agentId, part: new ErrorRetry({ error: err }) })
+                switch (err.reason._tag) {
+                  case "ToolNotFoundError":
+                  case "InvalidOutputError": {
+                    const toAppend = Prompt.fromResponseParts(response).pipe(
+                      Prompt.concat(
+                        `There was an error, please try again using the "execute" tool:\n\n${Cause.pretty(Cause.fail(err))}`,
+                      ),
+                    )
+                    MutableRef.update(prompt, Prompt.concat(toAppend))
+                  }
+                }
               }
+              response = []
               return err.isRetryable
             },
             schedule: retryPolicy,
@@ -494,7 +510,7 @@ ${options.agentsMd}
 const generateSystemTools = (
   capabilities: AgentExecutor.Capabilities,
   conversationMode: boolean,
-) => `You only have one tool available: "execute", to run javascript code to do your work.
+) => `YOU ONLY HAVE ONE TOOL AVAILABLE: "execute", to run javascript code to do your work.
 
 - Use \`console.log\` to print any output you need.
 - Use top level await.${
