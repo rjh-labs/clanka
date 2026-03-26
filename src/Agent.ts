@@ -438,6 +438,22 @@ ${content}
           Effect.retry({
             while: (err) => {
               if (err._tag === "TimeoutError") {
+                maybeSend({
+                  agentId,
+                  part: new ErrorRetry({
+                    error: AiError.make({
+                      module: "clanka/Agent",
+                      method: "send",
+                      reason: new AiError.UnknownError({
+                        description: "TurnTimeout was reached",
+                      }),
+                    }),
+                  }),
+                })
+                MutableRef.update(
+                  prompt,
+                  Prompt.concat(Prompt.fromResponseParts(response)),
+                )
                 response = []
                 return true
               }
