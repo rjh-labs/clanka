@@ -331,10 +331,17 @@ const normalizePatchEscapedQuotes = (text: string): string =>
       })
     : text
 
+const normalizeTemplateEscapedMarkers = (text: string): string =>
+  text.replace(/\\{2,}(?=`|\$\{)/g, "\\")
+
+const normalizePatchEscapedCodeSpans = (text: string): string =>
+  text.replace(/(?<!\\)\\\\`([^`\r\n]+?)\\\\`/g, "\\`$1\\`")
+
 const normalizeNonPatchEscapedTemplateMarkers = (text: string): string =>
-  text
-    .replace(/\\{2,}(?=`|\$\{)/g, "\\")
-    .replace(/(^|\s)\\+(?=\.[A-Za-z0-9_-]+\/)/g, "$1")
+  normalizeTemplateEscapedMarkers(text).replace(
+    /(^|\s)\\+(?=\.[A-Za-z0-9_-]+\/)/g,
+    "$1",
+  )
 
 const findStringLiteralEnd = (
   text: string,
@@ -489,7 +496,7 @@ const escapeTemplateLiteralContent = (text: string): string => {
   const patchNormalized = normalizePatchEscapedQuotes(text)
   const isPatchContent = patchNormalized.includes("*** Begin Patch")
   const normalized = isPatchContent
-    ? patchNormalized
+    ? normalizePatchEscapedCodeSpans(patchNormalized)
     : normalizeNonPatchEscapedTemplateMarkers(patchNormalized)
 
   if (
