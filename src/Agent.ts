@@ -715,7 +715,7 @@ export class ConversationMode extends ServiceMap.Reference<boolean>(
 export class TurnTimeout extends ServiceMap.Reference<Duration.Duration>(
   "clanka/Agent/TurnTimeout",
   {
-    defaultValue: () => Duration.minutes(2),
+    defaultValue: () => Duration.minutes(5),
   },
 ) {
   static readonly layer = (timeout: Duration.Input) =>
