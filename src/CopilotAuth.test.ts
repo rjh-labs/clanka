@@ -12,7 +12,6 @@ import {
 import * as KeyValueStore from "effect/unstable/persistence/KeyValueStore"
 import {
   COPILOT_VISION_REQUEST_HEADER,
-  CopilotVerification,
   DEFAULT_OPENAI_INTENT,
   DEFAULT_USER_AGENT,
   GithubCopilotAuth,
@@ -26,6 +25,7 @@ import {
   toGithubCopilotAuthKeyValueStore,
   toTokenStore,
 } from "./CopilotAuth.ts"
+import * as DeviceCodeHandler from "./DeviceCodeHandler.ts"
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -182,7 +182,7 @@ describe("GithubCopilotAuth", () => {
 
       const auth = yield* GithubCopilotAuth.make.pipe(
         Effect.provideService(HttpClient.HttpClient, client),
-        Effect.provide(CopilotVerification.layerConsole),
+        Effect.provide(DeviceCodeHandler.layerConsole),
       )
 
       const token = yield* auth.get
@@ -222,7 +222,7 @@ describe("GithubCopilotAuth", () => {
 
         const auth = yield* GithubCopilotAuth.make.pipe(
           Effect.provideService(HttpClient.HttpClient, client),
-          Effect.provide(CopilotVerification.layerConsole),
+          Effect.provide(DeviceCodeHandler.layerConsole),
         )
 
         const authenticated = yield* auth.authenticate
@@ -285,7 +285,7 @@ describe("GithubCopilotAuth", () => {
 
       const auth = yield* GithubCopilotAuth.make.pipe(
         Effect.provideService(HttpClient.HttpClient, client),
-        Effect.provide(CopilotVerification.layerConsole),
+        Effect.provide(DeviceCodeHandler.layerConsole),
       )
 
       assert.strictEqual(
@@ -332,7 +332,7 @@ describe("GithubCopilotAuth", () => {
 
       const auth = yield* GithubCopilotAuth.make.pipe(
         Effect.provideService(HttpClient.HttpClient, client),
-        Effect.provide(CopilotVerification.layerConsole),
+        Effect.provide(DeviceCodeHandler.layerConsole),
       )
 
       const firstFiber = yield* auth.get.pipe(
@@ -385,7 +385,7 @@ describe("GithubCopilotAuth", () => {
             GithubCopilotAuth,
             GithubCopilotAuth.make.pipe(
               Effect.provideService(HttpClient.HttpClient, client),
-              Effect.provide(CopilotVerification.layerConsole),
+              Effect.provide(DeviceCodeHandler.layerConsole),
             ),
           ),
         )

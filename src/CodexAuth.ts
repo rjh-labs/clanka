@@ -1,7 +1,6 @@
 /**
  * @since 1.0.0
  */
-import * as Console from "effect/Console"
 import * as Effect from "effect/Effect"
 import * as Encoding from "effect/Encoding"
 import * as Function from "effect/Function"
@@ -16,6 +15,7 @@ import * as HttpClient from "effect/unstable/http/HttpClient"
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest"
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse"
 import * as KeyValueStore from "effect/unstable/persistence/KeyValueStore"
+import { DeviceCodeHandler } from "./DeviceCodeHandler.ts"
 
 export const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 export const ISSUER = "https://auth.openai.com"
@@ -32,21 +32,6 @@ const DEVICE_VERIFICATION_URL = `/codex/device`
 const DEFAULT_DEVICE_POLL_INTERVAL_SECONDS = 5
 const DEFAULT_TOKEN_EXPIRY_SECONDS = 3600
 const ACCOUNT_ID_HEADER = "ChatGPT-Account-Id"
-
-export class CodexVerification extends ServiceMap.Service<
-  CodexVerification,
-  {
-    onCode(options: {
-      readonly verifyUrl: string
-      readonly code: string
-    }): Effect.Effect<void, CodexAuthError>
-  }
->()("clanka/CodexAuth/CodexVerification") {
-  static readonly layerConsole = Layer.succeed(this, {
-    onCode: (options) =>
-      Console.log(`Open ${options.verifyUrl} and enter code ${options.code}`),
-  })
-}
 
 export class TokenData extends Schema.Class<TokenData>(
   "clanka/CodexAuth/TokenData",
@@ -309,7 +294,7 @@ export class CodexAuth extends ServiceMap.Service<
   }
 >()("clanka/CodexAuth") {
   static readonly make = Effect.gen(function* () {
-    const verfication = yield* CodexVerification
+    const verfication = yield* DeviceCodeHandler
     const tokenStore = toTokenStore(yield* KeyValueStore.KeyValueStore)
     const httpClient = (yield* HttpClient.HttpClient).pipe(
       HttpClient.mapRequest(
@@ -359,7 +344,7 @@ export class CodexAuth extends ServiceMap.Service<
       const deviceCode = yield* requestDeviceCode
       yield* verfication.onCode({
         verifyUrl: ISSUER + DEVICE_VERIFICATION_URL,
-        code: deviceCode.userCode,
+        deviceCode: deviceCode.userCode,
       })
       const authorization = yield* pollAuthorization(deviceCode)
       return yield* exchangeAuthorizationCode(authorization)
@@ -556,10 +541,6 @@ export class CodexAuth extends ServiceMap.Service<
   })
 
   static readonly layer = Layer.effect(CodexAuth, CodexAuth.make)
-
-  static readonly layerConsole = this.layer.pipe(
-    Layer.provide(CodexVerification.layerConsole),
-  )
 
   static readonly layerClientNoDeps = Layer.effect(
     HttpClient.HttpClient,

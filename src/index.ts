@@ -31,6 +31,11 @@ export * as Copilot from "./Copilot.ts"
 /**
  * @since 1.0.0
  */
+export * as DeviceCodeHandler from "./DeviceCodeHandler.ts"
+
+/**
+ * @since 1.0.0
+ */
 export * as OutputFormatter from "./OutputFormatter.ts"
 
 /**

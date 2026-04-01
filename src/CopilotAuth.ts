@@ -2,7 +2,6 @@
  * @since 1.0.0
  */
 import * as Effect from "effect/Effect"
-import * as Console from "effect/Console"
 import * as Function from "effect/Function"
 import * as Layer from "effect/Layer"
 import * as Option from "effect/Option"
@@ -14,6 +13,7 @@ import * as HttpClient from "effect/unstable/http/HttpClient"
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest"
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse"
 import * as KeyValueStore from "effect/unstable/persistence/KeyValueStore"
+import { DeviceCodeHandler } from "./DeviceCodeHandler.ts"
 
 export const CLIENT_ID = "Ov23li8tweQw6odWQebz"
 export const ISSUER = "https://github.com"
@@ -31,21 +31,6 @@ export const DEFAULT_USER_AGENT = "clanka"
 const DEVICE_CODE_URL = "/login/device/code"
 const ACCESS_TOKEN_URL = "/login/oauth/access_token"
 const DEFAULT_POLL_INTERVAL_SECONDS = 5
-
-export class CopilotVerification extends ServiceMap.Service<
-  CopilotVerification,
-  {
-    onCode(options: {
-      readonly verifyUrl: string
-      readonly code: string
-    }): Effect.Effect<void, GithubCopilotAuthError>
-  }
->()("clanka/CopilotAuth/CopilotVerification") {
-  static readonly layerConsole = Layer.succeed(this, {
-    onCode: (options) =>
-      Console.log(`Open ${options.verifyUrl} and enter code: ${options.code}`),
-  })
-}
 
 export class TokenData extends Schema.Class<TokenData>(
   "clanka/GithubCopilotAuth/TokenData",
@@ -238,7 +223,7 @@ export class GithubCopilotAuth extends ServiceMap.Service<
   }
 >()("clanka/GithubCopilotAuth") {
   static readonly make = Effect.gen(function* () {
-    const verfication = yield* CopilotVerification
+    const verfication = yield* DeviceCodeHandler
     const tokenStore = toTokenStore(yield* KeyValueStore.KeyValueStore)
     const httpClient = (yield* HttpClient.HttpClient).pipe(
       HttpClient.mapRequest(
@@ -392,7 +377,7 @@ export class GithubCopilotAuth extends ServiceMap.Service<
       const deviceCode = yield* requestDeviceCode()
       yield* verfication.onCode({
         verifyUrl: deviceCode.verificationUri,
-        code: deviceCode.userCode,
+        deviceCode: deviceCode.userCode,
       })
       return yield* pollAccessToken(deviceCode)
     })
@@ -430,10 +415,6 @@ export class GithubCopilotAuth extends ServiceMap.Service<
   static readonly layer = Layer.effect(
     GithubCopilotAuth,
     GithubCopilotAuth.make,
-  )
-
-  static readonly layerConsole = this.layer.pipe(
-    Layer.provide(CopilotVerification.layerConsole),
   )
 
   static readonly layerClientNoDeps = Layer.effect(
